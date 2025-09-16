@@ -29,14 +29,14 @@
             background-color: #f0f0f0;
         }
         
-        /* 加载动画样式 */
+        /* 优化的加载动画样式 */
         #loading-container {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            background-color: #f0f0f0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -51,25 +51,48 @@
         }
         
         .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid #ccc;
-            border-top: 4px solid #4CAF50;
+            width: 80px;
+            height: 80px;
+            border: 6px solid rgba(255, 255, 255, 0.3);
+            border-top: 6px solid white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
         }
         
         .loading-text {
-            color: #333;
-            font-family: Arial, sans-serif;
-            font-size: 18px;
+            color: white;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 22px;
+            font-weight: 500;
             text-align: center;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+        
+        /* 加载动画额外效果 */
+        .loading-spinner::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 2s ease-out infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
         }
         
         /* FPS显示样式 */
@@ -150,33 +173,84 @@
             transform: scale(0.95);
         }
         
-        /* 进度条样式 */
+        /* 优化的进度条样式 */
         .progress-container {
             width: 80%;
             max-width: 600px;
-            height: 20px;
-            background-color: #ddd;
-            border-radius: 10px;
-            margin: 15px 0;
+            height: 24px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            margin: 20px 0;
             overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) inset;
         }
         
         .progress-bar {
             height: 100%;
-            background-color: #4CAF50;
+            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
             width: 0%;
             transition: width 0.3s ease;
-            border-radius: 10px;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
         }
         
-        /* 加载详情信息 */
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        
+        /* 优化的加载详情信息 */
         .loading-details {
-            color: #555;
-            font-family: Arial, sans-serif;
-            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 16px;
             text-align: center;
-            margin-top: 10px;
+            margin-top: 15px;
             max-width: 80%;
+            line-height: 1.4;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* 加载统计信息容器 */
+        .loading-stats {
+            display: flex;
+            gap: 30px;
+            margin-top: 25px;
+            padding: 15px 30px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        
+        .stat-value {
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
         }
         
         /* 加载日志区域 */
@@ -221,7 +295,7 @@
     <div id="model-container">
     </div>
     
-    <!-- 加载动画容器 -->
+    <!-- 优化的加载动画容器 -->
     <div id="loading-container">
         <div class="loading-spinner"></div>
         <div class="loading-text">正在准备加载...</div>
@@ -229,6 +303,21 @@
             <div class="progress-bar"></div>
         </div>
         <div class="loading-details">初始化资源...</div>
+        <!-- 加载统计信息 -->
+        <div class="loading-stats">
+            <div class="stat-item">
+                <div class="stat-label">已加载</div>
+                <div class="stat-value" id="stat-loaded-chunks">0/29</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">加载速度</div>
+                <div class="stat-value" id="stat-load-speed">0 KB/s</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">预计剩余</div>
+                <div class="stat-value" id="stat-remaining-time">--</div>
+            </div>
+        </div>
     </div>
     
     <!-- 加载日志按钮 -->
@@ -260,34 +349,163 @@
         // 初始化变量
         let scene, camera, renderer, controls;
         let loadedModels = [];
-        let modelFiles = [];
+        let chunkLoader = null;
+        let loadingTimeout = null;
+        const LOADING_TIMEOUT = 20000; // 20秒超时（优化：减少超时时间）
+        const PROGRESS_TIMEOUT = 8000; // 8秒无进度更新超时（优化：减少超时时间）
+        let lastProgressUpdate = Date.now();
+        let modelChunks = {}; // 存储已加载的模型块
+        let chunkLoadingQueue = []; // 加载队列
+        let failedChunks = []; // 加载失败的块
+        let loadedChunksCount = 0; // 已加载的块数量
+        let totalChunksCount = 0; // 总块数量
+        let maxConcurrentChunkLoads = 6; // 最大并发加载数量（优化：增加并发数）
+        let maxRetries = 5; // 最大重试次数（优化：增加重试次数）
+        let isLoadingComplete = false; // 加载是否完成
+        let startTime = 0; // 开始加载时间
+        let lastLoadedTime = 0; // 上次加载数据的时间
+        let lastLoadedBytes = 0; // 上次加载的字节数
+        let totalBytesLoaded = 0; // 已加载的总字节数
+        let totalBytesToLoad = 0; // 需要加载的总字节数
+        let averageLoadSpeed = 0; // 平均加载速度
+        let modelFiles = []; // 模型文件列表
+        let modelName = 'merged.glb'; // 默认模型文件名
+        const resourceCache = new Map(); // 资源缓存
+        const CACHE_ENABLED = true; // 是否启用缓存
+        const CACHE_EXPIRE_TIME = 3600000; // 缓存过期时间（1小时）
+        let loadingChunksTimers = {}; // 用于跟踪每个块的加载计时器
+        let frozenChunks = new Set(); // 记录被标记为"冻结"的块
         let fpsCounter = null;
         let frameCount = 0;
         let lastFpsUpdate = 0;
-        let chunkLoader = null;
-        let modelChunks = {}; // 存储模型块
         let loadingManager = null;
-        let loadedChunksCount = 0; // 已加载的块数量
-        let totalChunksCount = 0; // 总块数量
         let isLoadingChunks = false; // 是否正在加载块
-        let chunkLoadingQueue = []; // 块加载队列
-        let maxConcurrentChunkLoads = 2; // 最大并发加载数
-        let failedChunks = []; // 存储加载失败的块
-        let maxRetries = 3; // 每个块的最大重试次数
+        let loadStartTime = 0; // 用于优化：跟踪每个块的加载开始时间
+        let visibleChunks = new Set(); // 用于优化：跟踪可见的块
+        let loadingStats = { // 用于优化：加载统计信息
+            totalChunks: 0,
+            loadedChunks: 0,
+            failedChunks: 0,
+            totalSize: 0,
+            loadedSize: 0,
+            averageSpeed: 0,
+            peakSpeed: 0,
+            loadTimes: []
+        };
         
-        // 资源加载跟踪变量
-        let totalBytesLoaded = 0; // 已加载总字节数
-        let totalBytesToLoad = 0; // 预计总字节数
-        let startTime = 0; // 开始加载时间
-        let averageLoadSpeed = 0; // 平均加载速度 (KB/s)
-        let lastLoadedTime = 0; // 最后加载时间点
-        let lastLoadedBytes = 0; // 最后加载字节数
-        let isLoadingComplete = false; // 加载是否完成
+        // 设置加载超时处理函数
+        function setupLoadingTimeout() {
+            // 清除之前的超时计时器
+            if (loadingTimeout) {
+                clearTimeout(loadingTimeout);
+            }
+            
+            // 设置新的超时计时器
+            loadingTimeout = setTimeout(() => {
+                if (!isLoadingComplete) {
+                    console.warn('加载可能已卡住，尝试强制完成加载过程');
+                    forceCompleteLoading();
+                }
+            }, LOADING_TIMEOUT);
+        }
         
-        // 缓存机制
-        const resourceCache = new Map(); // 资源缓存
-        const CACHE_ENABLED = true; // 是否启用缓存
-        const CACHE_EXPIRE_TIME = 60 * 60 * 1000; // 缓存过期时间 (1小时)
+        // 检查加载进度是否更新
+        function checkProgressUpdate() {
+            const currentTime = Date.now();
+            
+            // 如果长时间没有进度更新，尝试强制完成加载
+            if (currentTime - lastProgressUpdate > PROGRESS_TIMEOUT && !isLoadingComplete) {
+                console.warn('加载进度长时间未更新，检查是否卡住');
+                
+                // 检查是否有块加载卡在100%
+                const stuckChunks = Object.entries(modelChunks).filter(([index, chunk]) => 
+                    chunk.loading && chunk.loadedBytes && chunk.totalBytes && 
+                    chunk.loadedBytes >= chunk.totalBytes * 0.95 && 
+                    frozenChunks.has(parseInt(index)) === false
+                );
+                
+                if (stuckChunks.length > 0) {
+                    console.warn(`发现 ${stuckChunks.length} 个块可能卡住，尝试强制标记为完成`);
+                    stuckChunks.forEach(([index, chunk]) => {
+                        markChunkAsLoaded(parseInt(index));
+                    });
+                } else {
+                    // 如果没有明显卡住的块，尝试强制完成整个加载过程
+                    forceCompleteLoading();
+                }
+            }
+            
+            // 继续检查
+            requestAnimationFrame(checkProgressUpdate);
+        }
+        
+        // 标记特定块为已加载
+        function markChunkAsLoaded(chunkIndex) {
+            if (modelChunks[chunkIndex] && modelChunks[chunkIndex].loading) {
+                console.log(`强制标记块 ${chunkIndex} 为已加载`);
+                frozenChunks.add(chunkIndex);
+                
+                // 更新加载状态
+                modelChunks[chunkIndex].loading = false;
+                modelChunks[chunkIndex].loaded = true;
+                modelChunks[chunkIndex].forceLoaded = true;
+                
+                // 增加已加载块计数
+                loadedChunksCount++;
+                
+                // 更新进度
+                updateLoadingProgress();
+                
+                // 继续加载下一批
+                loadNextChunks();
+            }
+        }
+        
+        // 强制完成加载过程
+        function forceCompleteLoading() {
+            console.warn('强制完成加载过程，可能会跳过一些未完成的块');
+            
+            // 标记加载完成
+            isLoadingComplete = true;
+            
+            // 取消所有活跃的块加载计时器
+            Object.values(loadingChunksTimers).forEach(timer => clearTimeout(timer));
+            
+            // 隐藏加载动画
+            setTimeout(() => {
+                const loadingContainer = document.getElementById('loading-container');
+                if (loadingContainer) {
+                    loadingContainer.classList.add('hidden');
+                }
+            }, 1000);
+            
+            // 获取成功加载的块数量
+            const successfullyLoadedCount = Object.values(modelChunks).filter(chunk => chunk.loaded).length;
+            
+            if (successfullyLoadedCount > 0) {
+                console.log(`已成功加载 ${successfullyLoadedCount} 个块，即使有些块可能未完成加载`);
+                
+                // 获取完整模型
+                const fullModel = loadedModels.find(model => model.name === 'FullModel');
+                
+                if (fullModel) {
+                    // 调整相机以适应完整模型
+                    adjustCamera(fullModel);
+                    
+                    // 启动渐进式加载更新
+                    startProgressiveLoadingUpdate(fullModel);
+                }
+            } else {
+                console.error('没有成功加载任何块，创建替代几何体');
+                createFallbackGeometry();
+            }
+        }
+        
+        // 更新加载进度并重置进度更新计时器
+        function resetProgressUpdate() {
+            lastProgressUpdate = Date.now();
+            setupLoadingTimeout();
+        }
         
         // 初始化Three.js场景
         function initThreeJS() {
@@ -323,6 +541,18 @@
             const topLight = new THREE.DirectionalLight(0xffffff, 0.8);
             topLight.position.set(0, 10, 0); // 放置在顶部位置
             scene.add(topLight);
+
+            // 添加相机跟随的柔灯
+            const cameraLight = new THREE.SpotLight(0xffffff, 100.0); // 增强灯光强度到1.0
+            cameraLight.angle = Math.PI / 4; // 照射角度
+            cameraLight.penumbra = 0.5; // 半影效果，使边缘更柔和
+            cameraLight.decay = 1; // 降低衰减率，让灯光传播更远
+            cameraLight.distance = 1000; // 增加光照距离
+            
+            // 将光源附加到相机上
+            cameraLight.position.set(0, 0, -1); // 放置在相机后方
+            camera.add(cameraLight); // 添加到相机上
+            scene.add(camera); // 确保相机添加到场景中
             
             // 添加轨道控制器 - 按照用户要求配置交互控制
             controls = new OrbitControls(camera, renderer.domElement);
@@ -802,6 +1032,9 @@
             // 根据实际文件数量设置为29个块（索引0到28）
             totalChunksCount = 29;
             
+            // 更新统计信息
+            loadingStats.totalChunks = totalChunksCount;
+            
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
             fullModel.name = 'FullModel';
@@ -820,6 +1053,13 @@
             if (loadingText) {
                 loadingText.textContent = '准备加载分块模型...';
             }
+            
+            // 重置加载状态
+            loadingChunksTimers = {};
+            frozenChunks = new Set();
+            
+            // 设置加载超时处理
+            setupLoadingTimeout();
             
             // 初始化分块加载器
             chunkLoader = initChunkLoader();
@@ -840,19 +1080,78 @@
             // 按优先级排序加载队列
             chunkLoadingQueue.sort((a, b) => a.priority - b.priority);
             
+            // 预加载关键块
+            preloadCriticalChunks();
+            
             // 开始加载第一批块
             loadNextChunks();
         }
         
-        // 计算块的加载优先级（简单实现）
+        // 优化的块加载优先级计算
         function calculateChunkPriority(chunkIndex) {
-            // 中心区域的块优先加载
-            // 假设中间索引（约20）是模型的中心部分
+            // 1. 中心区域的块优先加载
             const centerIndex = totalChunksCount / 2;
             const distanceFromCenter = Math.abs(chunkIndex - centerIndex);
             
+            // 2. 动态调整优先级权重
+            let priority = distanceFromCenter;
+            
+            // 3. 根据块大小调整优先级（如果有大小信息）
+            if (chunkSizeMap && chunkSizeMap[chunkIndex]) {
+                // 小块优先加载，减少初始等待时间
+                const sizeFactor = Math.min(1, chunkSizeMap[chunkIndex] / 1000000); // 标准化大小（MB）
+                priority *= sizeFactor;
+            }
+            
+            // 4. 可见性预测 - 假设用户首先关注中心区域
+            if (visibleChunks.has(chunkIndex)) {
+                priority *= 0.5; // 可见块优先级提高
+            }
+            
             // 距离中心越近，优先级越高（数值越小）
-            return distanceFromCenter;
+            return priority;
+        }
+        
+        // 预加载关键块
+        function preloadCriticalChunks() {
+            // 定义关键块索引（例如中心区域的块）
+            const criticalChunks = [];
+            const centerIndex = Math.floor(totalChunksCount / 2);
+            
+            // 选择中心周围的块作为关键块
+            for (let i = Math.max(0, centerIndex - 3); i < Math.min(totalChunksCount, centerIndex + 3); i++) {
+                criticalChunks.push(i);
+            }
+            
+            // 优先处理关键块
+            const nonCriticalQueue = [];
+            
+            // 分离关键块和非关键块
+            for (let i = 0; i < chunkLoadingQueue.length; i++) {
+                const chunk = chunkLoadingQueue[i];
+                if (criticalChunks.includes(chunk.index)) {
+                    // 关键块保持在当前位置
+                } else {
+                    nonCriticalQueue.push(chunk);
+                }
+            }
+            
+            // 重新构建队列，将非关键块放在后面
+            const newQueue = [];
+            for (let i = 0; i < chunkLoadingQueue.length; i++) {
+                const chunk = chunkLoadingQueue[i];
+                if (criticalChunks.includes(chunk.index)) {
+                    newQueue.push(chunk);
+                }
+            }
+            
+            // 添加非关键块
+            newQueue.push(...nonCriticalQueue);
+            
+            // 更新队列
+            chunkLoadingQueue = newQueue;
+            
+            console.log(`预加载 ${criticalChunks.length} 个关键块，以提高初始加载体验`);
         }
         
         // 加载下一批分块
@@ -876,6 +1175,14 @@
                 const nextChunk = chunkLoadingQueue.shift();
                 loadChunk(nextChunk);
             }
+            
+            // 检查是否有块加载失败且可以重试
+            if (typeof checkForFailedChunks === 'function') {
+                checkForFailedChunks();
+            }
+            
+            // 检查是否有很长时间没有进度更新，如果是，则强制完成加载
+            checkProgressUpdate();
         }
         
         // 格式化文件大小
@@ -947,6 +1254,14 @@
                 loadingDetails.textContent = `正在加载块 ${index}/${totalChunksCount}${retries > 0 ? ` (重试 ${retries}/${maxRetries})` : ''}`;
             }
             
+            // 为每个块设置加载超时计时器
+            loadingChunksTimers[index] = setTimeout(() => {
+                if (modelChunks[index] && modelChunks[index].loading) {
+                    console.warn(`块 ${index} 加载超时，尝试标记为完成`);
+                    markChunkAsLoaded(index);
+                }
+            }, LOADING_TIMEOUT);
+            
             // 为了防止并发请求过多导致的问题，添加小延迟
             setTimeout(() => {
                 // 创建带有缓存的加载函数
@@ -983,6 +1298,12 @@
                 loadWithCache(
                     url,
                     function(gltf) {
+                        // 清除此块的超时计时器
+                        if (loadingChunksTimers[index]) {
+                            clearTimeout(loadingChunksTimers[index]);
+                            delete loadingChunksTimers[index];
+                        }
+                        
                         const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
                         console.log(successMsg);
                         addLoadingLog(successMsg);
@@ -1047,6 +1368,12 @@
                         }
                     },
                     function(error) {
+                        // 清除此块的超时计时器
+                        if (loadingChunksTimers[index]) {
+                            clearTimeout(loadingChunksTimers[index]);
+                            delete loadingChunksTimers[index];
+                        }
+                        
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
@@ -1081,6 +1408,25 @@
             }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
         }
         
+        // 检查并处理失败的块
+        function checkForFailedChunks() {
+            if (failedChunks.length === 0) return;
+            
+            // 如果当前没有活动的加载，或者活动加载数少于最大并发数
+            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
+            const availableSlots = maxConcurrentChunkLoads - activeLoads;
+            
+            if (availableSlots > 0) {
+                // 最多重试availableSlots个失败的块
+                const chunksToRetry = failedChunks.splice(0, availableSlots);
+                
+                chunksToRetry.forEach(chunkInfo => {
+                    console.log(`重试加载块 ${chunkInfo.index} (${chunkInfo.retries}/${maxRetries})`);
+                    loadChunk(chunkInfo);
+                });
+            }
+        }
+        
         // 优化块模型
         function optimizeChunkModel(model, chunkIndex) {
             // 设置块模型的属性
@@ -1103,10 +1449,19 @@
             model.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
         }
         
-        // 更新加载进度显示
+        // 优化的加载进度更新
         function updateLoadingProgress() {
             const loadingText = document.querySelector('.loading-text');
             const progressBar = document.querySelector('.progress-bar');
+            const loadingDetails = document.querySelector('.loading-details');
+            
+            // 获取统计元素
+            const statLoadedChunks = document.getElementById('stat-loaded-chunks');
+            const statLoadSpeed = document.getElementById('stat-load-speed');
+            const statRemainingTime = document.getElementById('stat-remaining-time');
+            
+            // 重置进度更新计时器
+            resetProgressUpdate();
             
             if (loadingText && totalChunksCount > 0) {
                 // 计算块加载百分比
@@ -1122,21 +1477,46 @@
                 const speed = calculateLoadSpeed(totalBytesLoaded);
                 const remainingTime = calculateRemainingTime();
                 
-                loadingText.textContent = `正在加载: ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
+                // 优化的加载文本信息
+                let loadStatus = '';
+                if (chunkPercent < 20) {
+                    loadStatus = `正在加载基础模型... ${loadedChunksCount}/${totalChunksCount} 块`;
+                } else if (chunkPercent < 60) {
+                    loadStatus = `加载中... ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
+                } else {
+                    loadStatus = `即将完成... ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
+                }
                 
+                loadingText.textContent = loadStatus;
+                
+                // 更新进度条
                 if (progressBar) {
                     // 使用文件大小百分比更准确地反映加载进度
                     const displayPercent = totalBytesToLoad > 0 ? sizePercent : chunkPercent;
                     progressBar.style.width = `${displayPercent}%`;
                     
-                    // 根据进度改变进度条颜色
-                    if (displayPercent >= 90) {
-                        progressBar.style.backgroundColor = '#4CAF50';
-                    } else if (displayPercent >= 50) {
-                        progressBar.style.backgroundColor = '#FFC107';
-                    } else {
-                        progressBar.style.backgroundColor = '#2196F3';
+                    // 应用进度条动画效果
+                    if (displayPercent > 0) {
+                        progressBar.classList.add('active');
                     }
+                }
+                
+                // 更新加载详情
+                if (loadingDetails) {
+                    loadingDetails.textContent = `已加载: ${formatFileSize(totalBytesLoaded)} | 速度: ${formatFileSize(speed)}/s | 预计剩余: ${remainingTime}`;
+                }
+                
+                // 更新统计信息
+                if (statLoadedChunks) {
+                    statLoadedChunks.textContent = `${loadedChunksCount}/${totalChunksCount}`;
+                }
+                
+                if (statLoadSpeed) {
+                    statLoadSpeed.textContent = `${formatFileSize(speed)}/s`;
+                }
+                
+                if (statRemainingTime) {
+                    statRemainingTime.textContent = remainingTime;
                 }
             }
         }
@@ -1327,6 +1707,20 @@
             // 记录开始加载时间
             startTime = Date.now();
             lastLoadedTime = startTime;
+            loadStartTime = startTime;
+            
+            // 初始化加载统计信息
+            loadingStats.totalChunks = 0;
+            loadingStats.loadedChunks = 0;
+            loadingStats.failedChunks = 0;
+            loadingStats.totalSize = 0;
+            loadingStats.loadedSize = 0;
+            loadingStats.averageSpeed = 0;
+            loadingStats.peakSpeed = 0;
+            loadingStats.loadTimes = [];
+            
+            // 存储块大小映射（从文件名模式预测）
+            window.chunkSizeMap = {};
             
             try {
                 addLoadingLog('开始初始化应用');
