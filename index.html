@@ -795,6 +795,27 @@
             xhr.send();
         }
         
+        // 安全地检测URL是否有效且返回正确的内容类型
+        async function isValidGlbUrl(url) {
+            try {
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    cache: 'no-cache'
+                });
+                
+                if (!response.ok) {
+                    return false;
+                }
+                
+                // 检查Content-Type是否为模型相关类型
+                const contentType = response.headers.get('Content-Type') || '';
+                return contentType.includes('model/gltf-binary') || 
+                       contentType.includes('application/octet-stream');
+            } catch (error) {
+                return false;
+            }
+        }
+        
         // 加载预分块的模型
         function loadPreChunkedModel() {
             console.log('准备加载预分块的模型');
@@ -961,22 +982,46 @@
                         }
                     }
                     
-                    // 常规加载
-                    chunkLoader.load(
-                        url,
-                        function(data) {
-                            // 存入缓存
-                            if (CACHE_ENABLED) {
-                                resourceCache.set(url, {
-                                    data: data,
-                                    timestamp: Date.now()
-                                });
+                    // 为了解决Netlify上的问题，我们需要确保正确处理二进制文件
+                    // 先检查URL是否有效
+                    isValidGlbUrl(url).then(isValid => {
+                        if (!isValid) {
+                            const customError = new Error(`无效的GLB文件URL: ${url}`);
+                            customError.isInvalidUrl = true;
+                            onError(customError);
+                            return;
+                        }
+                        
+                        // 常规加载，但添加更多的错误处理
+                        chunkLoader.load(
+                            url,
+                            function(data) {
+                                // 存入缓存
+                                if (CACHE_ENABLED) {
+                                    resourceCache.set(url, {
+                                        data: data,
+                                        timestamp: Date.now()
+                                    });
+                                }
+                                onLoad(data);
+                            },
+                            onProgress,
+                            function(error) {
+                                // 处理"Unexpected token"错误，这通常是由于返回了HTML而不是GLB文件
+                                if (error.message && error.message.includes('Unexpected token')) {
+                                    console.error(`URL可能返回了HTML而不是GLB文件: ${url}`);
+                                    const enhancedError = new Error(`无效的GLB文件格式: ${error.message}`);
+                                    enhancedError.isInvalidFormat = true;
+                                    onError(enhancedError);
+                                } else {
+                                    onError(error);
+                                }
                             }
-                            onLoad(data);
-                        },
-                        onProgress,
-                        onError
-                    );
+                        );
+                    }).catch(err => {
+                        console.error('检查URL有效性时出错:', err);
+                        onError(err);
+                    });
                 }
                 
                 // 加载块
@@ -1050,6 +1095,35 @@
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
+                        
+                        // 特殊处理URL无效或格式错误的情况
+                        if (error.isInvalidUrl || error.isInvalidFormat) {
+                            console.error(`模型块 ${index} 可能路径错误或文件格式无效，将尝试备选方案`);
+                            
+                            // 尝试使用merged.glb作为备选
+                            if (!modelFiles.includes('merged.glb')) {
+                                console.log('添加merged.glb作为备选加载方案');
+                                modelFiles.push('merged.glb');
+                                
+                                // 清空当前加载队列，切换到备选方案
+                                chunkLoadingQueue = [];
+                                failedChunks = [];
+                                
+                                // 通知用户正在切换加载方案
+                                const loadingText = document.querySelector('.loading-text');
+                                if (loadingText) {
+                                    loadingText.textContent = '分块模型加载失败，正在尝试备选加载方案...';
+                                }
+                                
+                                // 延迟后启动备选方案
+                                setTimeout(() => {
+                                    // 尝试加载单一模型文件
+                                    loadModelFiles();
+                                }, 1000);
+                                
+                                return;
+                            }
+                        }
                         
                         // 如果重试次数未达到上限，则添加到失败列表以便重试
                         if (retries < maxRetries) {
@@ -1310,6 +1384,111 @@
             }
         }
         
+        // 加载模型文件
+        function loadModelFiles() {
+            if (modelFiles.length === 0) {
+                console.log('没有模型文件可加载');
+                return;
+            }
+            
+            // 初始化分块加载器
+            chunkLoader = initChunkLoader();
+            
+            // 获取加载容器引用
+            const loadingContainer = document.getElementById('loading-container');
+            const loadingText = document.querySelector('.loading-text');
+            
+            function hideLoadingAnimation() {
+                if (loadingContainer) {
+                    console.log('隐藏加载动画');
+                    loadingContainer.classList.add('hidden');
+                }
+            }
+            
+            function showError(message) {
+                if (loadingText) {
+                    loadingText.textContent = message;
+                    loadingText.style.color = '#ff0000'; // 红色错误信息
+                }
+                console.error('模型加载错误:', message);
+                
+                // 5秒后隐藏加载动画并显示替代几何体
+                setTimeout(() => {
+                    hideLoadingAnimation();
+                    createFallbackGeometry();
+                }, 3000);
+            }
+            
+            // 加载第一个模型文件
+            const modelFile = modelFiles[0];
+            
+            if (loadingText) {
+                loadingText.textContent = `正在加载模型: ${modelFile}`;
+            }
+            
+            console.log('开始加载模型文件:', modelFile);
+            addLoadingLog(`开始加载模型文件: ${modelFile}`);
+            
+            chunkLoader.load(
+                modelFile,
+                function(gltf) {
+                    console.log('模型加载成功:', modelFile);
+                    addLoadingLog(`模型加载成功: ${modelFile}`);
+                    
+                    const model = gltf.scene;
+                    loadedModels.push(model);
+                    
+                    // 优化模型处理 - 简化光照计算
+                    model.traverse(function(child) {
+                        if (child.isMesh) {
+                            child.castShadow = false;
+                            child.receiveShadow = false;
+                            // 减少材质复杂度
+                            if (child.material) {
+                                child.material.envMapIntensity = 0.5;
+                            }
+                        }
+                    });
+                    
+                    // 让模型横向显示 - 旋转-90度（修正方向）
+                    model.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
+                    
+                    scene.add(model);
+                    
+                    // 调整相机
+                    adjustCamera(model);
+                    
+                    // 添加渐进式加载更新
+                    startProgressiveLoadingUpdate(model);
+                    
+                    // 隐藏加载动画
+                    setTimeout(hideLoadingAnimation, 1000);
+                },
+                function(xhr) {
+                    // 显示加载进度
+                    if (xhr.lengthComputable && loadingText) {
+                        const percent = Math.round((xhr.loaded / xhr.total) * 100);
+                        loadingText.textContent = `正在加载模型: ${percent}%`;
+                    }
+                },
+                function(error) {
+                    console.error(`模型加载失败:`, error);
+                    
+                    // 特殊处理内存不足错误
+                    if (error.message && (error.message.includes('out of memory') || error.message.includes('内存不足'))) {
+                        showError('浏览器内存不足，正在尝试优化加载方式...');
+                        // 尝试使用更低内存的加载方式
+                        setTimeout(() => {
+                            tryLowMemoryLoading(modelFile);
+                        }, 2000);
+                        return;
+                    }
+                    
+                    showError('模型加载失败，请确保模型文件格式正确且可用。');
+                }
+            );
+        }
+        
         // 初始化应用
         function initApp() {
             // 设置日志切换
@@ -1343,9 +1522,6 @@
                         loadingTip.classList.add('hidden');
                     }, 5000);
                 }
-                
-                // 注意：现在modelFiles可能为空，因为分块加载通过loadPreChunkedModel函数处理
-                // 所以我们不再在这里加载模型，而是由checkForChunksDirectory和loadPreChunkedModel函数处理
                 
             } catch (error) {
                 const errorMsg = `应用初始化失败: ${error.message}`;
