@@ -919,6 +919,11 @@
                                 const headerStr = String.fromCharCode.apply(null, uint8Array.slice(0, 4));
                                 const header8Str = String.fromCharCode.apply(null, uint8Array);
                                 
+                                console.log(`模型块 ${index} 接收到的文件头: "${headerStr}"，完整8字节头: "${header8Str}"`);
+                                
+                                // 提取前30个字符以便调试
+                                const preview = String.fromCharCode.apply(null, new Uint8Array(buffer.slice(0, 30)));
+                                
                                 // 检查是否是HTML内容（常见的HTML开头模式）
                                 const isHTML = 
                                     header8Str.startsWith('<!DOCTYPE') || 
@@ -926,19 +931,52 @@
                                     header8Str.startsWith('<!doctype') || 
                                     header8Str.startsWith('<HTML') || 
                                     header8Str.startsWith('<h') || 
-                                    header8Str.startsWith('<?xml') ||
-                                    headerStr.startsWith('vers'); // 针对Netlify环境中返回的'Version ht'等特殊情况
+                                    header8Str.startsWith('<?xml');
+                                
+                                // 特殊处理：如果检测到version字符串但文件应该是GLB
+                                const hasVersionPrefix = headerStr.startsWith('vers');
                                 
                                 if (isHTML) {
-                                    // 提取前30个字符以便更好地调试
-                                    const preview = String.fromCharCode.apply(null, new Uint8Array(buffer.slice(0, 30)));
-                                    throw new Error(`检测到HTML或非GLB内容，不是有效的GLB文件。前几个字符: "${preview}"。这很可能是服务器配置问题，特别是在Netlify环境中。`);
+                                    throw new Error(`检测到HTML内容，不是有效的GLB文件。前几个字符: "${preview}"。这很可能是Netlify服务器配置问题或URL大小写问题。`);
+                                } else if (hasVersionPrefix) {
+                                    console.warn(`警告: 模型块 ${index} 检测到version前缀，这可能是Git LFS指针文件或服务器配置问题。前几个字符: "${preview}"`);
+                                    // 对于这种特殊情况，我们仍然尝试解析，但标记为可能的问题
+                                    try {
+                                        // 尝试使用loader解析文件
+                                        loader.parse(
+                                            buffer,
+                                            '',
+                                            function(gltf) {
+                                                // 存入缓存
+                                                if (CACHE_ENABLED) {
+                                                    resourceCache.set(url, {
+                                                        data: gltf,
+                                                        timestamp: Date.now()
+                                                    });
+                                                }
+                                                onLoad(gltf);
+                                            },
+                                            function(error) {
+                                                // 如果解析失败，尝试使用备用URL
+                                                console.error(`解析失败，尝试使用备用大小写URL`);
+                                                // 尝试使用备用URL（改变大小写）
+                                                const altUrl = url.includes('mx2/') ? url.replace('mx2/', 'MX2/') : url.replace('MX2/', 'mx2/');
+                                                console.log(`尝试备用URL: ${altUrl}`);
+                                                loadWithAltUrl(altUrl, loader, index, onLoad, onError);
+                                            }
+                                        );
+                                        return; // 避免继续执行下面的代码
+                                    } catch (e) {
+                                        throw new Error(`处理version前缀文件时出错: ${e.message}。前几个字符: "${preview}"`);
+                                    }
                                 }
                                 
-                                // 允许glTF头或尝试解析其他格式
-                                if (headerStr !== 'glTF') {
+                                // 如果是有效的glTF头，直接处理
+                                if (headerStr === 'glTF') {
+                                    console.log(`模型块 ${index} 检测到有效GLB文件头，开始解析`);
+                                } else {
                                     // 对于非标准格式，记录日志但仍尝试解析
-                                    console.warn(`警告: 模型块 ${index} 文件格式不标准，开头字符: ${headerStr}，将尝试解析`);
+                                    console.warn(`警告: 模型块 ${index} 文件格式不标准，开头字符: "${headerStr}"，前30字符: "${preview}"，将尝试解析`);
                                 }
                                 
                                 // 尝试使用loader解析文件
@@ -983,6 +1021,55 @@
                         console.error(`loadWithCache函数内部错误:`, e);
                         onError(new Error(`加载过程中发生内部错误: ${e.message}`));
                     }
+                }
+                
+                // 备用URL加载函数，用于处理大小写问题
+                function loadWithAltUrl(altUrl, loader, index, onLoad, onError) {
+                    console.log(`开始使用备用URL加载模型块 ${index}: ${altUrl}`);
+                    
+                    // 使用XMLHttpRequest加载备用URL
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('GET', altUrl, true);
+                    xhr.responseType = 'arraybuffer';
+                    
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            console.log(`备用URL加载成功，开始解析模型块 ${index}`);
+                            const buffer = xhr.response;
+                            
+                            // 验证文件格式
+                            const uint8Array = new Uint8Array(buffer.slice(0, 4));
+                            const headerStr = String.fromCharCode.apply(null, uint8Array);
+                            
+                            if (headerStr !== 'glTF') {
+                                console.warn(`警告: 备用URL加载的模型块 ${index} 文件格式不标准，开头字符: "${headerStr}"`);
+                            }
+                            
+                            // 解析文件
+                            loader.parse(
+                                buffer,
+                                '',
+                                function(gltf) {
+                                    console.log(`备用URL模型块 ${index} 解析成功`);
+                                    onLoad(gltf);
+                                },
+                                function(error) {
+                                    console.error(`备用URL模型块 ${index} 解析失败:`, error);
+                                    onError(new Error(`备用URL解析失败: ${error.message}。请检查文件路径大小写或服务器配置。`));
+                                }
+                            );
+                        } else {
+                            console.error(`备用URL加载失败，状态码: ${xhr.status}`);
+                            onError(new Error(`备用URL加载失败，状态码: ${xhr.status}。请检查文件路径大小写或服务器配置。`));
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        console.error(`备用URL网络错误`);
+                        onError(new Error(`备用URL网络错误。请检查文件路径大小写或服务器配置。`));
+                    };
+                    
+                    xhr.send();
                 }
                 
                 // 加载超时处理函数
