@@ -323,18 +323,6 @@
             const topLight = new THREE.DirectionalLight(0xffffff, 0.8);
             topLight.position.set(0, 10, 0); // 放置在顶部位置
             scene.add(topLight);
-
-            // 添加相机跟随的柔灯
-            const cameraLight = new THREE.SpotLight(0xffffff, 100.0); // 增强灯光强度到1.0
-            cameraLight.angle = Math.PI / 4; // 照射角度
-            cameraLight.penumbra = 0.5; // 半影效果，使边缘更柔和
-            cameraLight.decay = 1; // 降低衰减率，让灯光传播更远
-            cameraLight.distance = 1000; // 增加光照距离
-            
-            // 将光源附加到相机上
-            cameraLight.position.set(0, 0, -1); // 放置在相机后方
-            camera.add(cameraLight); // 添加到相机上
-            scene.add(camera); // 确保相机添加到场景中
             
             // 添加轨道控制器 - 按照用户要求配置交互控制
             controls = new OrbitControls(camera, renderer.domElement);
@@ -784,7 +772,7 @@
         // 检查是否存在分块目录并尝试加载分块模型
         function checkForChunksDirectory() {
             // 我们尝试访问mx2目录中的第一个文件来验证目录存在
-            const testChunkUrl = 'mx2/___0000005_0000000.glb';
+            const testChunkUrl = 'mx2/___0000000.glb';
             
             const xhr = new XMLHttpRequest();
             xhr.open('HEAD', testChunkUrl, true);
@@ -839,7 +827,7 @@
             // 构建块加载队列 - 按照块索引顺序加载
             for (let i = 0; i < totalChunksCount; i++) {
                 const chunkIndex = String(i).padStart(7, '0');
-                const chunkUrl = `mx2/___0000005_${chunkIndex}.glb`;
+                const chunkUrl = `mx2/___${chunkIndex}.glb`;
             
                 // 添加到加载队列
                 chunkLoadingQueue.push({
