@@ -902,25 +902,16 @@
                                 throw new Error(`HTTP错误! 状态码: ${response.status}`);
                             }
                             
-                            // 检查响应类型
+                            // 检查是否是HTML错误页面
                             const contentType = response.headers.get('content-type');
-                            if (!contentType) {
-                                throw new Error('无法确定响应内容类型');
-                            }
-                            
-                            // 对于HTML错误页面，提供明确的错误信息
-                            if (contentType.includes('text/html')) {
+                            if (contentType && contentType.includes('text/html')) {
                                 return response.text().then(html => {
                                     throw new Error(`服务器返回HTML而非模型文件。这可能是文件路径错误或服务器配置问题。`);
                                 });
                             }
                             
-                            // 对于二进制文件，使用arrayBuffer
-                            if (contentType.includes('model/gltf-binary') || contentType.includes('application/octet-stream')) {
-                                return response.arrayBuffer();
-                            }
-                            
-                            throw new Error(`不支持的内容类型: ${contentType}`);
+                            // 对于所有非HTML响应，统一使用arrayBuffer处理，确保二进制文件正确加载
+                            return response.arrayBuffer();
                         })
                         .then(arrayBuffer => {
                             // 使用GLTFLoader来解析二进制数据
