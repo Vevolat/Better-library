@@ -896,56 +896,60 @@
                         }
                     }
                     
-                    // 常规加载 - 改进的加载处理以捕获非JSON响应
-                    try {
-                        chunkLoader.load(
-                            url,
-                            function(data) {
-                                // 存入缓存
-                                if (CACHE_ENABLED) {
-                                    resourceCache.set(url, {
-                                        data: data,
-                                        timestamp: Date.now()
-                                    });
-                                }
-                                onLoad(data);
-                            },
-                            onProgress,
-                            function(error) {
-                                // 检测是否是JSON解析错误
-                                if (error.message && error.message.includes('Unexpected token')) {
-                                    // 尝试使用fetch API直接加载并检查响应类型
-                                    fetch(url)
-                                        .then(response => {
-                                            if (!response.ok) {
-                                                throw new Error(`HTTP错误! 状态码: ${response.status}`);
-                                            }
-                                            const contentType = response.headers.get('content-type');
-                                            if (!contentType || !contentType.includes('model/gltf-binary')) {
-                                                throw new Error(`无效的内容类型: ${contentType || '未知'}`);
-                                            }
-                                            return response.arrayBuffer();
-                                        })
-                                        .then(buffer => {
-                                            // 使用Three.js的BufferGeometryLoader尝试替代加载
-                                            const loader = new THREE.FileLoader();
-                                            loader.setResponseType('arraybuffer');
-                                            loader.load(url, function(buffer) {
-                                                // 这里简化处理，实际可能需要更复杂的逻辑
-                                                onError(new Error(`无法正确解析GLB文件，请检查文件格式`));
-                                            });
-                                        })
-                                        .catch(fetchError => {
-                                            onError(new Error(`加载失败: ${fetchError.message}`));
-                                        });
-                                } else {
-                                    onError(error);
-                                }
+                    // 直接使用fetch API来加载并验证响应
+                    fetch(url)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP错误! 状态码: ${response.status}`);
                             }
-                        );
-                    } catch (e) {
-                        onError(new Error(`加载过程中出现异常: ${e.message}`));
-                    }
+                            
+                            // 检查响应类型
+                            const contentType = response.headers.get('content-type');
+                            if (!contentType) {
+                                throw new Error('无法确定响应内容类型');
+                            }
+                            
+                            // 对于HTML错误页面，提供明确的错误信息
+                            if (contentType.includes('text/html')) {
+                                return response.text().then(html => {
+                                    throw new Error(`服务器返回HTML而非模型文件。这可能是文件路径错误或服务器配置问题。`);
+                                });
+                            }
+                            
+                            // 对于二进制文件，使用arrayBuffer
+                            if (contentType.includes('model/gltf-binary') || contentType.includes('application/octet-stream')) {
+                                return response.arrayBuffer();
+                            }
+                            
+                            throw new Error(`不支持的内容类型: ${contentType}`);
+                        })
+                        .then(arrayBuffer => {
+                            // 使用GLTFLoader来解析二进制数据
+                            const loader = new GLTFLoader();
+                            loader.parse(arrayBuffer, '', 
+                                function(gltf) {
+                                    // 存入缓存
+                                    if (CACHE_ENABLED) {
+                                        resourceCache.set(url, {
+                                            data: gltf,
+                                            timestamp: Date.now()
+                                        });
+                                    }
+                                    onLoad(gltf);
+                                },
+                                function(parseError) {
+                                    onError(new Error(`解析GLB文件失败: ${parseError.message}`));
+                                }
+                            );
+                        })
+                        .catch(fetchError => {
+                            // 特殊处理JSON解析错误
+                            if (fetchError.message.includes('Unexpected token')) {
+                                onError(new Error(`加载失败: 服务器返回了非JSON数据。这通常表示请求的URL可能返回了HTML错误页面。请检查文件路径是否正确。`));
+                            } else {
+                                onError(new Error(`加载失败: ${fetchError.message}`));
+                            }
+                        });
                 }
                 
                 // 加载超时处理函数
