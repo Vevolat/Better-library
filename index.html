@@ -1060,7 +1060,7 @@
                 );
             }, 50); // 减少延迟，提高加载速度，不再使用 index * 100
         }
-        
+
         // 加载下一批分块
         function loadNextChunks() {
             // 检查是否还有块需要加载
@@ -1069,20 +1069,20 @@
                 onAllChunksLoaded();
                 return;
             }
-            
+
             // 计算当前正在加载的块数量
             const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
-            
+
             // 如果当前加载的块数量少于最大并发数，则加载更多块
             const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
-            
+
             console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
-            
+
             for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
                 const nextChunk = chunkLoadingQueue.shift();
                 loadChunk(nextChunk);
             }
-            
+
             // 特殊处理：如果队列不为空但没有启动新的加载（可能是因为并发限制），
             // 则定期检查是否可以加载更多块
             if (chunkLoadingQueue.length > 0 && chunksToLoad <= 0) {
@@ -1094,6 +1094,108 @@
                     }
                 }, 500); // 500ms后再次检查
             }
+        }
+
+        // 更新加载进度显示
+        function updateLoadingProgress() {
+            const loadingText = document.querySelector('.loading-text');
+            const progressBar = document.querySelector('.progress-bar');
+
+            if (loadingText && totalChunksCount > 0) {
+                // 计算块加载百分比
+                const chunkPercent = Math.round((loadedChunksCount / totalChunksCount) * 100);
+
+                // 计算文件大小加载百分比（如果有数据）
+                let sizePercent = 0;
+                if (totalBytesToLoad > 0) {
+                    sizePercent = Math.round((totalBytesLoaded / totalBytesToLoad) * 100);
+                }
+
+                // 显示综合进度信息
+                const speed = calculateLoadSpeed(totalBytesLoaded);
+                const remainingTime = calculateRemainingTime();
+
+                loadingText.textContent = `正在加载: ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
+
+                if (progressBar) {
+                    // 使用文件大小百分比更准确地反映加载进度
+                    const displayPercent = totalBytesToLoad > 0 ? sizePercent : chunkPercent;
+                    progressBar.style.width = `${displayPercent}%`;
+
+                    // 根据进度改变进度条颜色
+                    if (displayPercent >= 90) {
+                        progressBar.style.backgroundColor = '#4CAF50';
+                    } else if (displayPercent >= 50) {
+                        progressBar.style.backgroundColor = '#FFC107';
+                    } else {
+                        progressBar.style.backgroundColor = '#2196F3';
+                    }
+                }
+            }
+        }
+
+        // 计算加载速度
+        function calculateLoadSpeed(bytesLoaded) {
+            const currentTime = Date.now();
+            const elapsedTime = (currentTime - lastLoadedTime) / 1000; // 秒
+            const speed = bytesLoaded / elapsedTime;
+            return speed;
+        }
+
+        // 计算剩余时间
+        function calculateRemainingTime() {
+            const speed = calculateLoadSpeed(totalBytesLoaded);
+            if (speed === 0) return '计算中...';
+            
+            const remainingBytes = totalBytesToLoad - totalBytesLoaded;
+            const remainingSeconds = remainingBytes / speed;
+            
+            if (remainingSeconds < 60) {
+                return `${Math.round(remainingSeconds)}秒`;
+            } else if (remainingSeconds < 3600) {
+                return `${Math.round(remainingSeconds / 60)}分钟`;
+            } else {
+                return `${Math.round(remainingSeconds / 3600)}小时`;
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 优化单个模型块
+        function optimizeChunkModel(chunkModel, chunkIndex) {
+            // 对块模型进行优化处理
+            chunkModel.traverse(function(child) {
+                if (child.isMesh) {
+                    // 禁用阴影计算以提高性能
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                    
+                    // 简化材质以降低内存使用
+                    if (child.material) {
+                        child.material.envMapIntensity = 0.5;
+                        
+                        // 对于低优先级或远距离的块，可以进一步降低质量
+                        // 这里根据块索引进行简单的质量分级
+                        if (chunkIndex % 5 === 0) { // 每隔5个块降低一些质量
+                            child.material.needsUpdate = true;
+                        }
+                    }
+                }
+            });
+            
+            // 让模型横向显示 - 旋转-90度（修正方向）
+            chunkModel.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
+            
+            console.log(`优化模型块 ${chunkIndex} 完成`);
         }
         
         // 所有分块加载完成后的处理
