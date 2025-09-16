@@ -895,22 +895,56 @@
                         }
                     }
                     
-                    // 常规加载
-                    chunkLoader.load(
-                        url,
-                        function(data) {
-                            // 存入缓存
-                            if (CACHE_ENABLED) {
-                                resourceCache.set(url, {
-                                    data: data,
-                                    timestamp: Date.now()
-                                });
+                    // 常规加载 - 改进的加载处理以捕获非JSON响应
+                    try {
+                        chunkLoader.load(
+                            url,
+                            function(data) {
+                                // 存入缓存
+                                if (CACHE_ENABLED) {
+                                    resourceCache.set(url, {
+                                        data: data,
+                                        timestamp: Date.now()
+                                    });
+                                }
+                                onLoad(data);
+                            },
+                            onProgress,
+                            function(error) {
+                                // 检测是否是JSON解析错误
+                                if (error.message && error.message.includes('Unexpected token')) {
+                                    // 尝试使用fetch API直接加载并检查响应类型
+                                    fetch(url)
+                                        .then(response => {
+                                            if (!response.ok) {
+                                                throw new Error(`HTTP错误! 状态码: ${response.status}`);
+                                            }
+                                            const contentType = response.headers.get('content-type');
+                                            if (!contentType || !contentType.includes('model/gltf-binary')) {
+                                                throw new Error(`无效的内容类型: ${contentType || '未知'}`);
+                                            }
+                                            return response.arrayBuffer();
+                                        })
+                                        .then(buffer => {
+                                            // 使用Three.js的BufferGeometryLoader尝试替代加载
+                                            const loader = new THREE.FileLoader();
+                                            loader.setResponseType('arraybuffer');
+                                            loader.load(url, function(buffer) {
+                                                // 这里简化处理，实际可能需要更复杂的逻辑
+                                                onError(new Error(`无法正确解析GLB文件，请检查文件格式`));
+                                            });
+                                        })
+                                        .catch(fetchError => {
+                                            onError(new Error(`加载失败: ${fetchError.message}`));
+                                        });
+                                } else {
+                                    onError(error);
+                                }
                             }
-                            onLoad(data);
-                        },
-                        onProgress,
-                        onError
-                    );
+                        );
+                    } catch (e) {
+                        onError(new Error(`加载过程中出现异常: ${e.message}`));
+                    }
                 }
                 
                 // 加载超时处理函数
