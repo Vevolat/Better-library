@@ -936,8 +936,14 @@
                                 // 特殊处理：如果检测到version字符串但文件应该是GLB
                                 const hasVersionPrefix = headerStr.startsWith('vers');
                                 
+                                // 检测是否是Git LFS指针文件
+                                const isGitLFS = preview.includes('git-lfs.github');
+                                
                                 if (isHTML) {
                                     throw new Error(`检测到HTML内容，不是有效的GLB文件。前几个字符: "${preview}"。这很可能是Netlify服务器配置问题或URL大小写问题。`);
+                                } else if (isGitLFS) {
+                                    console.error(`警告: 模型块 ${index} 检测到Git LFS指针文件，不是实际的GLB文件内容。前几个字符: "${preview}"`);
+                                    throw new Error(`检测到Git LFS指针文件，不是实际的GLB文件内容。这表明仓库使用了Git LFS，但Netlify未正确配置来处理这些文件。\n\n在Netlify环境中，请确保：\n1. 启用Netlify Large Media功能\n2. 正确配置Git LFS和Netlify集成\n3. 或者将实际的GLB文件直接提交到仓库而不使用Git LFS`);
                                 } else if (hasVersionPrefix) {
                                     console.warn(`警告: 模型块 ${index} 检测到version前缀，这可能是Git LFS指针文件或服务器配置问题。前几个字符: "${preview}"`);
                                     // 对于这种特殊情况，我们仍然尝试解析，但标记为可能的问题
