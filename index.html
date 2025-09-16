@@ -292,6 +292,7 @@
         let maxConcurrentChunkLoads = 2; // 最大并发加载数
         let failedChunks = []; // 存储加载失败的块
         let maxRetries = 3; // 每个块的最大重试次数
+        let discoveredChunkFiles = []; // 存储自动检测到的模型文件列表
         
         // 资源加载跟踪变量
         let totalBytesLoaded = 0; // 已加载总字节数
@@ -827,23 +828,8 @@
             
             totalChunksCount = 0;
             const chunkFiles = [];
-            const maxAttempts = 50; // 减少最大尝试次数，避免过多404请求
+            const maxAttempts = 100; // 增加最大尝试次数以支持更多文件
             let attempts = 0;
-            
-            // Netlify环境特殊处理：直接使用已知的文件数量
-            if (window.NETLIFY_DEPLOYED) {
-                console.log('Netlify环境：使用预定义的文件数量29');
-                // 根据你的目录结构，有29个文件（0000000到0000028）
-                for (let i = 0; i < 29; i++) {
-                    const chunkIndex = String(i).padStart(7, '0');
-                    const chunkUrl = `mx2/___${chunkIndex}.glb`;
-                    chunkFiles.push(chunkUrl);
-                }
-                totalChunksCount = 29;
-                console.log(`Netlify环境：预加载${totalChunksCount}个模型文件`);
-                onChunksDiscovered(chunkFiles);
-                return;
-            }
             
             // 创建一个检测文件是否存在的函数
             function checkChunkExists(index) {
@@ -892,7 +878,7 @@
                 xhr.send();
             }
             
-            // 开始从索引0检测，设置最大检测数量为实际文件数+5
+            // 开始从索引0检测
             checkChunkExists(0);
         }
         
@@ -909,6 +895,9 @@
             if (loadingText) {
                 loadingText.textContent = `准备加载${chunkFiles.length}个模型文件...`;
             }
+            
+            // 保存检测到的文件列表
+            discoveredChunkFiles = chunkFiles;
             
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
@@ -937,18 +926,15 @@
             // 初始化分块加载器
             chunkLoader = initChunkLoader();
             
-            // 构建块加载队列 - 按照块索引顺序加载
-            for (let i = 0; i < totalChunksCount; i++) {
-                const chunkIndex = String(i).padStart(7, '0');
-                const chunkUrl = `mx2/___${chunkIndex}.glb`;
-            
+            // 构建块加载队列 - 使用自动检测到的文件列表
+            discoveredChunkFiles.forEach((chunkUrl, index) => {
                 // 添加到加载队列
                 chunkLoadingQueue.push({
                     url: chunkUrl,
-                    index: i,
-                    priority: calculateChunkPriority(i) // 计算块的加载优先级
+                    index: index,
+                    priority: calculateChunkPriority(index) // 计算块的加载优先级
                 });
-            }
+            });
             
             // 按优先级排序加载队列
             chunkLoadingQueue.sort((a, b) => a.priority - b.priority);
