@@ -1182,9 +1182,10 @@
             
             // 构建块加载队列 - 按照块索引顺序加载
             for (let i = 0; i < totalChunksCount; i++) {
-                // 修复URL构建，确保它与实际文件路径匹配
-                // 直接使用完整文件名格式，避免路径解析问题
-                const chunkUrl = `mx2/___0000005_${String(i).padStart(7, '0')}.glb`;
+                // 构建健壮的URL，确保在不同服务器环境下都能正常工作
+                // 使用完整文件名格式，避免路径解析问题
+                const chunkIndexStr = String(i).padStart(7, '0');
+                const chunkUrl = `mx2/___0000005_${chunkIndexStr}.glb`;
                 
                 // 添加到加载队列
                 chunkLoadingQueue.push({
@@ -1387,152 +1388,302 @@
             
             // 为了防止并发请求过多导致的问题，添加小延迟
             setTimeout(() => {
-                // 创建带有缓存的加载函数
-                function loadWithCache(url, onLoad, onProgress, onError) {
-                    if (CACHE_ENABLED && resourceCache.has(url)) {
-                        const cachedItem = resourceCache.get(url);
-                        // 检查缓存是否过期
-                        if (Date.now() - cachedItem.timestamp < CACHE_EXPIRE_TIME) {
-                            loadingStats.cachedLoads++;
-                            addLoadingLog(`从缓存加载块 ${index}`);
-                            onLoad(cachedItem.data);
-                            return;
-                        }
-                    }
+                // 尝试使用增强的加载函数，如果可用
+                if (window.loadWithEnhancedErrorHandling) {
+                    console.log(`使用增强的加载函数加载块 ${index}`);
                     
-                    // 常规加载
-                    chunkLoader.load(
+                    window.loadWithEnhancedErrorHandling(
                         url,
-                        function(data) {
-                            // 存入缓存
-                            if (CACHE_ENABLED) {
-                                resourceCache.set(url, {
-                                    data: data,
-                                    timestamp: Date.now()
-                                });
-                            }
-                            onLoad(data);
-                        },
-                        onProgress,
-                        onError
-                    );
-                }
-                
-                // 加载块
-                loadWithCache(
-                    url,
-                    function(gltf) {
-                        // 清除此块的超时计时器
-                        if (loadingChunksTimers[index]) {
-                            clearTimeout(loadingChunksTimers[index]);
-                            delete loadingChunksTimers[index];
-                        }
-                        
-                        const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
-
-                        
-                        const chunkModel = gltf.scene;
-                        
-                        // 优化块模型
-                        optimizeChunkModel(chunkModel, index);
-                        
-                        // 存储加载的块
-                        modelChunks[index] = {
-                            loading: false,
-                            loaded: true,
-                            object: chunkModel
-                        };
-                        
-                        // 将块添加到完整模型中
-                        const fullModel = loadedModels.find(model => model.name === 'FullModel');
-                        if (fullModel) {
-                            fullModel.add(chunkModel);
-                        }
-                        
-                        // 增加已加载块计数
-                        loadedChunksCount++;
-                        
-                        // 更新加载进度
-                        updateLoadingProgress();
-                        
-                        // 加载下一批块
-                        loadNextChunks();
-                        
-                    },
-                    function(xhr) {
-                        // 添加单个块的加载进度
-                        if (xhr.lengthComputable) {
-                            const percent = Math.round((xhr.loaded / xhr.total) * 100);
-                            const currentChunkBytesLoaded = xhr.loaded;
-                            const currentChunkBytesTotal = xhr.total;
-                            
-                                // 更新总字节数（如果是新块的首次加载）
-                            if (!modelChunks[index].totalBytes) {
-                                modelChunks[index].totalBytes = currentChunkBytesTotal;
-                                totalBytesToLoad += currentChunkBytesTotal;
-                                loadingStats.totalBytesToLoad = totalBytesToLoad;
+                        index,
+                        CACHE_ENABLED,
+                        resourceCache,
+                        CACHE_EXPIRE_TIME,
+                        loadingStats,
+                        addLoadingLog,
+                        chunkLoader,
+                        function(gltf) {
+                            // 清除此块的超时计时器
+                            if (loadingChunksTimers[index]) {
+                                clearTimeout(loadingChunksTimers[index]);
+                                delete loadingChunksTimers[index];
                             }
                             
-                            // 计算当前已加载的总字节数
-                            const previousLoadedBytes = modelChunks[index].loadedBytes || 0;
-                            modelChunks[index].loadedBytes = currentChunkBytesLoaded;
+                            const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
                             
-                                // 只在新数据到达时更新总字节计数
-                            if (currentChunkBytesLoaded > previousLoadedBytes) {
-                                totalBytesLoaded += (currentChunkBytesLoaded - previousLoadedBytes);
-                                loadingStats.totalBytesLoaded = totalBytesLoaded;
-                            }
+                            const chunkModel = gltf.scene;
                             
-                            // 更新详细进度信息
-                            const speed = calculateLoadSpeed(totalBytesLoaded);
-                            const remainingTime = calculateRemainingTime();
+                            // 优化块模型
+                            optimizeChunkModel(chunkModel, index);
                             
-                            if (loadingDetails) {
-                                loadingDetails.textContent = `块 ${index} 加载中: ${percent}% | 速度: ${formatFileSize(speed)}/s | 预计剩余: ${remainingTime}`;
-                            }
-                        }
-                    },
-                    function(error) {
-                        // 清除此块的超时计时器
-                        if (loadingChunksTimers[index]) {
-                            clearTimeout(loadingChunksTimers[index]);
-                            delete loadingChunksTimers[index];
-                        }
-                        
-                        loadingStats.failedLoads++;
-                        loadingStats.activeLoads--;
-                        
-                        const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
-                        console.error(errorMsg);
-                        addLoadingLog(errorMsg, true);
-                        
-                        // 如果重试次数未达到上限，则添加到失败列表以便重试
-                        if (retries < maxRetries) {
-                            const retryMsg = `将在延迟后重试加载模型块 ${index}`;
-                            console.log(retryMsg);
-                            addLoadingLog(retryMsg);
-                            // 添加到失败列表，稍后重试
-                            failedChunks.push({
-                                url: url,
-                                index: index,
-                                retries: retries + 1
-                            });
-                        } else {
-                            const maxRetryMsg = `模型块 ${index} 达到最大重试次数，不再重试`;
-                            console.error(maxRetryMsg);
-                            addLoadingLog(maxRetryMsg, true);
-                            // 标记此块为加载失败
+                            // 存储加载的块
                             modelChunks[index] = {
                                 loading: false,
-                                loaded: false,
-                                error: error
+                                loaded: true,
+                                object: chunkModel
                             };
+                            
+                            // 将块添加到完整模型中
+                            const fullModel = loadedModels.find(model => model.name === 'FullModel');
+                            if (fullModel) {
+                                fullModel.add(chunkModel);
+                            } else {
+                                // 如果没有找到FullModel，创建一个
+                                const newFullModel = new THREE.Group();
+                                newFullModel.name = 'FullModel';
+                                newFullModel.add(chunkModel);
+                                loadedModels.push(newFullModel);
+                                scene.add(newFullModel);
+                            }
+                            
+                            // 增加已加载块计数
+                            loadedChunksCount++;
+                            loadingStats.successLoads++;
+                            
+                            // 更新加载进度
+                            updateLoadingProgress();
+                            
+                            // 加载下一批块
+                            loadNextChunks();
+                        },
+                        function(xhr) {
+                            // 添加单个块的加载进度
+                            if (xhr.lengthComputable) {
+                                const percent = Math.round((xhr.loaded / xhr.total) * 100);
+                                const currentChunkBytesLoaded = xhr.loaded;
+                                const currentChunkBytesTotal = xhr.total;
+                                
+                                // 更新总字节数（如果是新块的首次加载）
+                                if (!modelChunks[index].totalBytes) {
+                                    modelChunks[index].totalBytes = currentChunkBytesTotal;
+                                    totalBytesToLoad += currentChunkBytesTotal;
+                                    loadingStats.totalBytesToLoad = totalBytesToLoad;
+                                }
+                                
+                                // 计算当前已加载的总字节数
+                                const previousLoadedBytes = modelChunks[index].loadedBytes || 0;
+                                modelChunks[index].loadedBytes = currentChunkBytesLoaded;
+                                
+                                // 只在新数据到达时更新总字节计数
+                                if (currentChunkBytesLoaded > previousLoadedBytes) {
+                                    totalBytesLoaded += (currentChunkBytesLoaded - previousLoadedBytes);
+                                    loadingStats.totalBytesLoaded = totalBytesLoaded;
+                                }
+                                
+                                // 更新详细进度信息
+                                const speed = calculateLoadSpeed(totalBytesLoaded);
+                                const remainingTime = calculateRemainingTime();
+                                
+                                if (loadingDetails) {
+                                    loadingDetails.textContent = `块 ${index} 加载中: ${percent}% | 速度: ${formatFileSize(speed)}/s | 预计剩余: ${remainingTime}`;
+                                }
+                            }
+                        },
+                        function(error) {
+                            // 清除此块的超时计时器
+                            if (loadingChunksTimers[index]) {
+                                clearTimeout(loadingChunksTimers[index]);
+                                delete loadingChunksTimers[index];
+                            }
+                             
+                            loadingStats.failedLoads++;
+                            loadingStats.activeLoads--;
+                            
+                            const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
+                            console.error(errorMsg);
+                            addLoadingLog(errorMsg, true);
+                            
+                            // 如果重试次数未达到上限，则添加到失败列表以便重试
+                            if (retries < maxRetries) {
+                                // 根据错误类型调整重试策略
+                                let retryDelay = 1000; // 默认延迟1秒
+                                if (error.message.includes('Unexpected token') || error.message.includes('JSON.parse')) {
+                                    // 对于JSON解析错误，增加重试延迟
+                                    retryDelay = 2000;
+                                    addLoadingLog(`检测到JSON解析错误，增加重试延迟到${retryDelay}ms`);
+                                }
+                                
+                                const retryMsg = `将在${retryDelay}ms后重试加载模型块 ${index}`;
+                                console.log(retryMsg);
+                                addLoadingLog(retryMsg);
+                                
+                                // 添加到失败列表，稍后重试
+                                setTimeout(() => {
+                                    failedChunks.push({
+                                        url: url,
+                                        index: index,
+                                        retries: retries + 1
+                                    });
+                                    checkForFailedChunks();
+                                }, retryDelay);
+                            } else {
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，不再重试`;
+                                console.error(maxRetryMsg);
+                                addLoadingLog(maxRetryMsg, true);
+                                // 标记此块为加载失败
+                                modelChunks[index] = {
+                                    loading: false,
+                                    loaded: false,
+                                    error: error
+                                };
+                                
+                                // 如果无法加载此块，尝试使用备用几何体
+                                if (window.createPlaceholderGeometry) {
+                                    window.createPlaceholderGeometry(index, loadedModels, scene, modelChunks, addLoadingLog);
+                                }
+                            }
+                            
+                            // 继续加载下一批块
+                            loadNextChunks();
+                        }
+                    );
+                } else {
+                    // 创建带有缓存的加载函数
+                    function loadWithCache(url, onLoad, onProgress, onError) {
+                        if (CACHE_ENABLED && resourceCache.has(url)) {
+                            const cachedItem = resourceCache.get(url);
+                            // 检查缓存是否过期
+                            if (Date.now() - cachedItem.timestamp < CACHE_EXPIRE_TIME) {
+                                loadingStats.cachedLoads++;
+                                addLoadingLog(`从缓存加载块 ${index}`);
+                                onLoad(cachedItem.data);
+                                return;
+                            }
                         }
                         
-                        // 继续加载下一批块
-                        loadNextChunks();
+                        // 常规加载
+                        chunkLoader.load(
+                            url,
+                            function(data) {
+                                // 存入缓存
+                                if (CACHE_ENABLED) {
+                                    resourceCache.set(url, {
+                                        data: data,
+                                        timestamp: Date.now()
+                                    });
+                                }
+                                onLoad(data);
+                            },
+                            onProgress,
+                            onError
+                        );
                     }
-                );
+                    
+                    // 加载块
+                    loadWithCache(
+                        url,
+                        function(gltf) {
+                            // 清除此块的超时计时器
+                            if (loadingChunksTimers[index]) {
+                                clearTimeout(loadingChunksTimers[index]);
+                                delete loadingChunksTimers[index];
+                            }
+                            
+                            const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
+
+                            
+                            const chunkModel = gltf.scene;
+                            
+                            // 优化块模型
+                            optimizeChunkModel(chunkModel, index);
+                            
+                            // 存储加载的块
+                            modelChunks[index] = {
+                                loading: false,
+                                loaded: true,
+                                object: chunkModel
+                            };
+                            
+                            // 将块添加到完整模型中
+                            const fullModel = loadedModels.find(model => model.name === 'FullModel');
+                            if (fullModel) {
+                                fullModel.add(chunkModel);
+                            }
+                            
+                            // 增加已加载块计数
+                            loadedChunksCount++;
+                            
+                            // 更新加载进度
+                            updateLoadingProgress();
+                            
+                            // 加载下一批块
+                            loadNextChunks();
+                            
+                        },
+                        function(xhr) {
+                            // 添加单个块的加载进度
+                            if (xhr.lengthComputable) {
+                                const percent = Math.round((xhr.loaded / xhr.total) * 100);
+                                const currentChunkBytesLoaded = xhr.loaded;
+                                const currentChunkBytesTotal = xhr.total;
+                                
+                                // 更新总字节数（如果是新块的首次加载）
+                                if (!modelChunks[index].totalBytes) {
+                                    modelChunks[index].totalBytes = currentChunkBytesTotal;
+                                    totalBytesToLoad += currentChunkBytesTotal;
+                                    loadingStats.totalBytesToLoad = totalBytesToLoad;
+                                }
+                                
+                                // 计算当前已加载的总字节数
+                                const previousLoadedBytes = modelChunks[index].loadedBytes || 0;
+                                modelChunks[index].loadedBytes = currentChunkBytesLoaded;
+                                
+                                // 只在新数据到达时更新总字节计数
+                                if (currentChunkBytesLoaded > previousLoadedBytes) {
+                                    totalBytesLoaded += (currentChunkBytesLoaded - previousLoadedBytes);
+                                    loadingStats.totalBytesLoaded = totalBytesLoaded;
+                                }
+                                
+                                // 更新详细进度信息
+                                const speed = calculateLoadSpeed(totalBytesLoaded);
+                                const remainingTime = calculateRemainingTime();
+                                
+                                if (loadingDetails) {
+                                    loadingDetails.textContent = `块 ${index} 加载中: ${percent}% | 速度: ${formatFileSize(speed)}/s | 预计剩余: ${remainingTime}`;
+                                }
+                            }
+                        },
+                        function(error) {
+                            // 清除此块的超时计时器
+                            if (loadingChunksTimers[index]) {
+                                clearTimeout(loadingChunksTimers[index]);
+                                delete loadingChunksTimers[index];
+                            }
+                              
+                            loadingStats.failedLoads++;
+                            loadingStats.activeLoads--;
+                            
+                            const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
+                            console.error(errorMsg);
+                            addLoadingLog(errorMsg, true);
+                            
+                            // 如果重试次数未达到上限，则添加到失败列表以便重试
+                            if (retries < maxRetries) {
+                                const retryMsg = `将在延迟后重试加载模型块 ${index}`;
+                                console.log(retryMsg);
+                                addLoadingLog(retryMsg);
+                                // 添加到失败列表，稍后重试
+                                failedChunks.push({
+                                    url: url,
+                                    index: index,
+                                    retries: retries + 1
+                                });
+                            } else {
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，不再重试`;
+                                console.error(maxRetryMsg);
+                                addLoadingLog(maxRetryMsg, true);
+                                // 标记此块为加载失败
+                                modelChunks[index] = {
+                                    loading: false,
+                                    loaded: false,
+                                    error: error
+                                };
+                            }
+                            
+                            // 继续加载下一批块
+                            loadNextChunks();
+                        }
+                    );
+                }
             }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
         }
         
@@ -1958,5 +2109,7 @@
         // 当页面加载完成后初始化应用
         window.addEventListener('load', initApp);
     </script>
+    <!-- 模型加载器增强脚本 -->
+    <script src="modelLoaderEnhancer.js"></script>
 </body>
 </html>
