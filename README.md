@@ -30,12 +30,33 @@
 
 ### 在线访问
 
-项目支持部署到GitHub Pages，可通过以下步骤进行部署：
+项目支持部署到GitHub Pages和Netlify，可通过以下步骤进行部署：
+
+### GitHub Pages部署
 
 1. 将项目推送到您的GitHub仓库
 2. 在仓库设置中启用GitHub Pages功能
 3. 选择主分支作为源
 4. 等待几分钟后，即可通过生成的URL访问3D模型查看器
+
+### Netlify部署
+
+1. 将项目推送到您的GitHub仓库
+2. 登录Netlify控制台
+3. 选择"New site from Git"创建新站点
+4. 连接您的GitHub账户并选择对应的仓库
+5. 在构建设置中：
+   - Build command: `echo 'No build command needed'`
+   - Publish directory: `/`
+6. 点击"Deploy site"完成部署
+
+### 注意事项
+
+- **CORS问题**：Netlify配置已包含CORS头，确保跨域访问正常
+- **MIME类型**：Netlify配置已为GLB和rcInfo文件设置正确的MIME类型
+- **文件大小**：对于超过100MB的大型模型文件，建议使用Git LFS进行管理
+- **缓存设置**：Netlify配置已启用长期缓存以提升加载性能
+- **Large Media**：对于特别大的模型文件(>1GB)，建议使用Netlify Large Media功能，它可以智能地处理大文件，只在需要时加载，而不是将它们包含在构建中
 
 ## 使用指南
 
