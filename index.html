@@ -289,6 +289,66 @@
         #show-logs-btn:hover {
             background-color: rgba(76, 175, 80, 1);
         }
+        
+        /* 加载总结统计信息样式 */
+        .loading-summary {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            display: none;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            animation: fadeInUp 0.5s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, 20px);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+        
+        .summary-label {
+            color: #ccc;
+            font-size: 13px;
+        }
+        
+        .summary-value {
+            font-weight: bold;
+            color: #4CAF50;
+            font-size: 15px;
+        }
     </style>
 </head>
 <body>
@@ -323,6 +383,40 @@
     <!-- 加载日志按钮 -->
     <button id="show-logs-btn">显示加载日志</button>
     <div id="loading-logs" class="loading-logs"></div>
+    
+    <!-- 加载总结统计信息容器 -->
+    <div id="loading-summary" class="loading-summary">
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-label">总块数:</span>
+                <span class="summary-value">0</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">成功加载:</span>
+                <span class="summary-value">0</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">加载失败:</span>
+                <span class="summary-value">0</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">数据总量:</span>
+                <span class="summary-value">0 KB</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">平均速度:</span>
+                <span class="summary-value">0 KB/s</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">总耗时:</span>
+                <span class="summary-value">0 s</span>
+            </div>
+            <div class="summary-item">
+                <span class="summary-label">缓存命中:</span>
+                <span class="summary-value">0</span>
+            </div>
+        </div>
+    </div>
     
     <!-- FPS显示容器 -->
     <!-- FPS显示 -->
@@ -382,7 +476,8 @@
         let isLoadingChunks = false; // 是否正在加载块
         let loadStartTime = 0; // 用于优化：跟踪每个块的加载开始时间
         let visibleChunks = new Set(); // 用于优化：跟踪可见的块
-        let loadingStats = { // 用于优化：加载统计信息
+        // 用于优化：加载统计信息
+        let loadingStats = {
             totalChunks: 0,
             loadedChunks: 0,
             failedChunks: 0,
@@ -390,7 +485,15 @@
             loadedSize: 0,
             averageSpeed: 0,
             peakSpeed: 0,
-            loadTimes: []
+            loadTimes: [],
+            cachedLoads: 0,     // 缓存命中次数
+            retries: 0,         // 重试次数
+            timeouts: 0,        // 超时次数
+            activeLoads: 0,     // 当前活跃加载数
+            successLoads: 0,    // 成功加载数
+            bytesLoaded: 0,     // 已加载字节数
+            totalBytesToLoad: 0, // 总字节数
+            totalBytesLoaded: 0 // 累计已加载字节数
         };
         
         // 设置加载超时处理函数
@@ -450,8 +553,19 @@
                 modelChunks[chunkIndex].loaded = true;
                 modelChunks[chunkIndex].forceLoaded = true;
                 
-                // 增加已加载块计数
+                // 计算块大小
+                    const chunkSize = gltf.byteLength || 0;
+                    
+                    const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url} (${formatFileSize(chunkSize)})`;
+                    console.log(successMsg);
+                    addLoadingLog(successMsg);
+                    
+                    // 增加已加载块计数
                 loadedChunksCount++;
+                loadingStats.successLoads++;
+                loadingStats.activeLoads--;
+                loadingStats.bytesLoaded += chunkSize;
+                loadingStats.totalBytesLoaded += chunkSize;
                 
                 // 更新进度
                 updateLoadingProgress();
@@ -693,7 +807,7 @@
                     loadingText.textContent = message;
                     loadingText.style.color = '#ff0000'; // 红色错误信息
                 }
-                console.error('模型加载错误:', message);
+                console.error('模型加载失败:', message);
                 
                 // 5秒后隐藏加载动画并显示替代几何体
                 setTimeout(() => {
@@ -1188,8 +1302,8 @@
         // 格式化文件大小
         function formatFileSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
-            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            else return (bytes / 1048576).toFixed(1) + ' MB';
+            else if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB';
+            else return Math.round(bytes / 1048576) + ' MB';
         }
         
         // 计算加载速度
@@ -1235,6 +1349,9 @@
             const loadingText = document.querySelector('.loading-text');
             const loadingDetails = document.querySelector('.loading-details');
             
+            // 增加正在加载的块计数
+            loadingStats.activeLoads++;
+            
             // 标记此块为正在加载
             modelChunks[index] = {
                 loading: true,
@@ -1258,6 +1375,7 @@
             loadingChunksTimers[index] = setTimeout(() => {
                 if (modelChunks[index] && modelChunks[index].loading) {
                     console.warn(`块 ${index} 加载超时，尝试标记为完成`);
+                    loadingStats.timeouts++;
                     markChunkAsLoaded(index);
                 }
             }, LOADING_TIMEOUT);
@@ -1270,6 +1388,7 @@
                         const cachedItem = resourceCache.get(url);
                         // 检查缓存是否过期
                         if (Date.now() - cachedItem.timestamp < CACHE_EXPIRE_TIME) {
+                            loadingStats.cachedLoads++;
                             addLoadingLog(`从缓存加载块 ${index}`);
                             onLoad(cachedItem.data);
                             return;
@@ -1305,8 +1424,7 @@
                         }
                         
                         const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
-                        console.log(successMsg);
-                        addLoadingLog(successMsg);
+
                         
                         const chunkModel = gltf.scene;
                         
@@ -1343,19 +1461,21 @@
                             const currentChunkBytesLoaded = xhr.loaded;
                             const currentChunkBytesTotal = xhr.total;
                             
-                            // 更新总字节数（如果是新块的首次加载）
+                                // 更新总字节数（如果是新块的首次加载）
                             if (!modelChunks[index].totalBytes) {
                                 modelChunks[index].totalBytes = currentChunkBytesTotal;
                                 totalBytesToLoad += currentChunkBytesTotal;
+                                loadingStats.totalBytesToLoad = totalBytesToLoad;
                             }
                             
                             // 计算当前已加载的总字节数
                             const previousLoadedBytes = modelChunks[index].loadedBytes || 0;
                             modelChunks[index].loadedBytes = currentChunkBytesLoaded;
                             
-                            // 只在新数据到达时更新总字节计数
+                                // 只在新数据到达时更新总字节计数
                             if (currentChunkBytesLoaded > previousLoadedBytes) {
                                 totalBytesLoaded += (currentChunkBytesLoaded - previousLoadedBytes);
+                                loadingStats.totalBytesLoaded = totalBytesLoaded;
                             }
                             
                             // 更新详细进度信息
@@ -1373,6 +1493,9 @@
                             clearTimeout(loadingChunksTimers[index]);
                             delete loadingChunksTimers[index];
                         }
+                        
+                        loadingStats.failedLoads++;
+                        loadingStats.activeLoads--;
                         
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
@@ -1412,7 +1535,7 @@
         function checkForFailedChunks() {
             if (failedChunks.length === 0) return;
             
-            // 如果当前没有活动的加载，或者活动加载数少于最大并发数
+            // 如果当前没有活跃的加载，或者活动加载数少于最大并发数
             const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
             const availableSlots = maxConcurrentChunkLoads - activeLoads;
             
@@ -1610,12 +1733,61 @@
             
             // 计算总加载时间
             const totalLoadTime = Math.round((Date.now() - startTime) / 1000);
-            const timeMsg = `总加载时间: ${totalLoadTime}秒 | 平均速度: ${formatFileSize(totalBytesLoaded / totalLoadTime)}/s`;
-            console.log(timeMsg);
-            addLoadingLog(timeMsg);
+            const averageSpeed = totalLoadTime > 0 ? (totalBytesLoaded / totalLoadTime) : 0;
+            const failedCount = totalChunksCount - successfullyLoadedCount;
             
+            // 格式化加载总结信息
+            const summaryMsg = `加载完成: ${successfullyLoadedCount}/${totalChunksCount} 块 | 数据量: ${formatFileSize(totalBytesLoaded)} | 平均速度: ${formatFileSize(averageSpeed)}/s | 总耗时: ${totalLoadTime}s`;
+            const detailMsg = `缓存命中: ${loadingStats.cachedLoads || 0} | 重试次数: ${loadingStats.retries || 0} | 超时次数: ${loadingStats.timeouts || 0}`;
+            
+            console.log(summaryMsg);
+            console.log(detailMsg);
+            addLoadingLog(summaryMsg);
+            addLoadingLog(detailMsg);
+            
+            // 更新加载详情
             if (loadingDetails) {
-                loadingDetails.textContent = `场景准备就绪，点击任意位置开始体验 | ${timeMsg}`;
+                loadingDetails.textContent = `场景准备就绪，点击任意位置开始体验 | ${summaryMsg}`;
+            }
+            
+            // 更新加载总结统计信息
+            const loadingSummaryElement = document.getElementById('loading-summary');
+            if (loadingSummaryElement) {
+                // 更新各项统计数据
+                const summaryItems = loadingSummaryElement.querySelectorAll('.summary-item');
+                
+                // 获取或创建loadingStats对象
+                if (!window.loadingStats) {
+                    window.loadingStats = {
+                        cachedLoads: 0,
+                        retries: 0,
+                        timeouts: 0
+                    };
+                }
+                
+                summaryItems.forEach(item => {
+                    const label = item.querySelector('.summary-label').textContent;
+                    const valueElement = item.querySelector('.summary-value');
+                    
+                    if (label.includes('总块数')) {
+                        valueElement.textContent = totalChunksCount;
+                    } else if (label.includes('成功加载')) {
+                        valueElement.textContent = successfullyLoadedCount;
+                    } else if (label.includes('加载失败')) {
+                        valueElement.textContent = failedCount;
+                    } else if (label.includes('数据总量')) {
+                        valueElement.textContent = formatFileSize(totalBytesLoaded);
+                    } else if (label.includes('平均速度')) {
+                        valueElement.textContent = `${formatFileSize(averageSpeed)}/s`;
+                    } else if (label.includes('总耗时')) {
+                        valueElement.textContent = `${totalLoadTime}s`;
+                    } else if (label.includes('缓存命中')) {
+                        valueElement.textContent = window.loadingStats.cachedLoads || 0;
+                    }
+                });
+                
+                // 显示加载总结
+                loadingSummaryElement.style.display = 'block';
             }
             
             // 确保完全加载后再隐藏加载动画
