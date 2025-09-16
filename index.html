@@ -915,13 +915,24 @@
                             })
                             .then(buffer => {
                                 // 验证文件是否包含glTF头或其他有效格式
-                                const uint8Array = new Uint8Array(buffer.slice(0, 4));
-                                const headerStr = String.fromCharCode.apply(null, uint8Array);
+                                const uint8Array = new Uint8Array(buffer.slice(0, 8));
+                                const headerStr = String.fromCharCode.apply(null, uint8Array.slice(0, 4));
+                                const header8Str = String.fromCharCode.apply(null, uint8Array);
                                 
-                                // 检查是否是HTML内容（通常以<!DOCTYPE或<html开头）
-                                const firstBytes = String.fromCharCode.apply(null, uint8Array.slice(0, 2));
-                                if (firstBytes === '<!' || firstBytes === '<h') {
-                                    throw new Error(`检测到HTML内容，不是有效的GLB文件。这可能是服务器配置问题或URL错误。`);
+                                // 检查是否是HTML内容（常见的HTML开头模式）
+                                const isHTML = 
+                                    header8Str.startsWith('<!DOCTYPE') || 
+                                    header8Str.startsWith('<html') || 
+                                    header8Str.startsWith('<!doctype') || 
+                                    header8Str.startsWith('<HTML') || 
+                                    header8Str.startsWith('<h') || 
+                                    header8Str.startsWith('<?xml') ||
+                                    headerStr.startsWith('vers'); // 针对Netlify环境中返回的'Version ht'等特殊情况
+                                
+                                if (isHTML) {
+                                    // 提取前30个字符以便更好地调试
+                                    const preview = String.fromCharCode.apply(null, new Uint8Array(buffer.slice(0, 30)));
+                                    throw new Error(`检测到HTML或非GLB内容，不是有效的GLB文件。前几个字符: "${preview}"。这很可能是服务器配置问题，特别是在Netlify环境中。`);
                                 }
                                 
                                 // 允许glTF头或尝试解析其他格式
@@ -950,21 +961,22 @@
                                 );
                             })
                             .catch(error => {
-                                // 增强的错误处理
+                                // 增强的错误处理，特别针对Netlify环境
                                 let errorMessage = `加载失败: ${error.message}`;
                                 
                                 // 特殊处理常见错误
                                 if (error.message.includes('Unexpected token')) {
-                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这很可能是服务器配置问题，导致返回了HTML页面而不是GLB文件。`;
+                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这很可能是服务器配置问题，导致返回了HTML页面而不是GLB文件。\n\n在Netlify环境中，请确保：\n1. 在_netlify.toml文件中正确配置了静态文件处理规则\n2. 没有错误的重定向规则影响到.glb文件请求\n3. 检查文件大小写是否与引用一致（Netlify是区分大小写的）`;
                                 } else if (error.message.includes('404')) {
-                                    errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。`;
+                                    errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。\n\n在Netlify环境中，请特别注意：\n1. 文件路径区分大小写\n2. 确保文件已正确部署到服务器\n3. 检查Netlify构建日志，确认文件是否被正确包含`;
                                 } else if (error.message.includes('HTML')) {
-                                    errorMessage = `加载失败: 检测到HTML内容，而不是GLB文件。请检查服务器配置。`;
+                                    errorMessage = `加载失败: 检测到HTML内容，而不是GLB文件。这是典型的Netlify服务器配置问题。\n\n建议解决方案：\n1. 创建或修改_netlify.toml文件\n2. 添加正确的静态文件处理规则\n3. 确保重定向规则不会拦截.glb文件请求`;
                                 } else if (error.message.includes('GLB') || error.message.includes('glTF')) {
-                                    errorMessage = `加载失败: 文件不是有效的GLB格式。`;
+                                    errorMessage = `加载失败: 文件不是有效的GLB格式。\n\n在Netlify环境中，这可能是因为：\n1. 服务器返回了HTML错误页面而非实际文件\n2. 静态文件MIME类型配置不正确\n3. 资源请求被重定向或拦截`;
                                 }
                                 
                                 console.error(`模型块 ${index} 加载错误:`, error);
+                                console.error(errorMessage);
                                 onError(new Error(errorMessage));
                             });
                     } catch (e) {
