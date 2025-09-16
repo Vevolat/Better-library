@@ -721,7 +721,29 @@
             });
         }
         
-
+        // 创建替代几何体
+        function createFallbackGeometry() {
+            console.log('创建替代几何体');
+            
+            // 创建一个简单的立方体
+            const geometry = new THREE.BoxGeometry(2, 2, 2);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                wireframe: true
+            });
+            
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+            loadedModels.push(cube);
+            
+            // 调整相机
+            adjustCamera(cube);
+            
+            // 隐藏加载动画
+            setTimeout(() => {
+                document.getElementById('loading-container').classList.add('hidden');
+            }, 500);
+        }
         
         // 调整相机以适合模型
         function adjustCamera(model) {
@@ -752,113 +774,25 @@
             // 我们尝试访问mx2目录中的第一个文件来验证目录存在
             const testChunkUrl = 'mx2/___0000000.glb';
             
-            // 定义备选模型文件列表（按优先级排序）
-            const fallbackModelFiles = [
-                'merged.glb',
-                'model.glb',
-                'scene.glb',
-                '3dmodel.glb',
-                'model.gltf',
-                'scene.gltf'
-            ];
-            
             const xhr = new XMLHttpRequest();
             xhr.open('HEAD', testChunkUrl, true);
             xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4) {
                     if (xhr.status === 200) {
                         console.log('检测到mx2分块模型目录');
-                        // 尝试加载预分块的模型，但也添加备选文件到列表中
+                        // 尝试加载预分块的模型
                         loadPreChunkedModel();
-                        
-                        // 添加备选模型文件，以备分块加载失败时使用
-                        modelFiles.push(...fallbackModelFiles);
                     } else {
-                        console.log('未检测到mx2分块模型目录，准备加载备选模型文件');
-                        modelFiles.push(...fallbackModelFiles);
-                        
-                        // 立即开始加载备选模型文件
-                        loadModelFiles();
+                        console.log('未检测到mx2分块模型目录，尝试加载单一模型文件');
+                        modelFiles.push('merged.glb');
                     }
                 }
             };
             xhr.onerror = function() {
-                console.log('检测分块目录失败，准备加载备选模型文件');
-                modelFiles.push(...fallbackModelFiles);
-                
-                // 立即开始加载备选模型文件
-                loadModelFiles();
+                console.log('检测分块目录失败，尝试加载单一模型文件');
+                modelFiles.push('merged.glb');
             };
             xhr.send();
-        }
-        
-        // 安全地检测URL是否有效且返回正确的内容类型
-        async function isValidGlbUrl(url) {
-            try {
-                // 使用HEAD请求先检查基本信息
-                const headResponse = await fetch(url, { 
-                    method: 'HEAD',
-                    cache: 'no-cache'
-                });
-                
-                if (!headResponse.ok) {
-                    return false;
-                }
-                
-                // 检查Content-Type是否为模型相关类型
-                const contentType = headResponse.headers.get('Content-Type') || '';
-                
-                // 检查文件大小是否合理（GLB文件通常至少有几个KB）
-                const contentLength = headResponse.headers.get('Content-Length');
-                if (contentLength && parseInt(contentLength) < 100) {
-                    return false;
-                }
-                
-                // Netlify特定处理：检查是否可能返回HTML
-                // 1. 如果Content-Type表明是HTML
-                if (contentType.includes('text/html')) {
-                    return false;
-                }
-                
-                // 2. 对于可能的HTML响应（即使Content-Type不正确），进行额外验证
-                if (!contentType.includes('model/gltf-binary') && 
-                    !contentType.includes('application/octet-stream')) {
-                    try {
-                        // 获取文件开头的几个字节进行检查
-                        const blobResponse = await fetch(url, {
-                            method: 'GET',
-                            cache: 'no-cache',
-                            headers: { 'Range': 'bytes=0-31' } // 只获取前32个字节
-                        });
-                        
-                        if (!blobResponse.ok) {
-                            return false;
-                        }
-                        
-                        // 读取前几个字节，检查是否为二进制文件而非HTML
-                        const arrayBuffer = await blobResponse.arrayBuffer();
-                        const firstBytes = new Uint8Array(arrayBuffer);
-                        
-                        // 检查是否有明显的HTML标签特征
-                        const textDecoder = new TextDecoder();
-                        const firstChars = textDecoder.decode(firstBytes);
-                        
-                        // 如果包含HTML标签或DOCTYPE声明，很可能是HTML文件
-                        if (firstChars.includes('<html') || 
-                            firstChars.includes('<!DOCTYPE') || 
-                            firstChars.includes('<body')) {
-                            console.warn('URL可能返回了HTML而不是GLB文件:', url);
-                            return false;
-                        }
-                    } catch (innerError) {
-                        console.warn('额外内容验证失败，假设URL有效:', innerError);
-                    }
-                }
-                
-                return true;
-            } catch (error) {
-                return false;
-            }
         }
         
         // 加载预分块的模型
@@ -1027,61 +961,22 @@
                         }
                     }
                     
-                    // 为了解决Netlify上的问题，我们需要确保正确处理二进制文件
-                    // 先检查URL是否有效
-                    isValidGlbUrl(url).then(isValid => {
-                        if (!isValid) {
-                            const customError = new Error(`无效的GLB文件URL: ${url}`);
-                            customError.isInvalidUrl = true;
-                            onError(customError);
-                            return;
-                        }
-                        
-                        // 常规加载，但添加更多的错误处理
-                        chunkLoader.load(
-                            url,
-                            function(data) {
-                                // 存入缓存
-                                if (CACHE_ENABLED) {
-                                    resourceCache.set(url, {
-                                        data: data,
-                                        timestamp: Date.now()
-                                    });
-                                }
-                                onLoad(data);
-                            },
-                            onProgress,
-                            function(error) {
-                                // 处理"Unexpected token"错误，这通常是由于返回了HTML而不是GLB文件
-                                if (error.message && error.message.includes('Unexpected token')) {
-                                    console.error(`URL可能返回了HTML而不是GLB文件: ${url}`);
-                                    const enhancedError = new Error(`无效的GLB文件格式: ${error.message}`);
-                                    enhancedError.isInvalidFormat = true;
-                                    enhancedError.originalError = error;
-                                    onError(enhancedError);
-                                } else if (error.message && error.message.includes('JSON.parse')) {
-                                    // 额外处理JSON解析错误
-                                    console.error(`GLB文件解析为JSON失败，可能是HTML响应: ${url}`);
-                                    const enhancedError = new Error(`GLB文件JSON解析错误: ${error.message}`);
-                                    enhancedError.isInvalidFormat = true;
-                                    enhancedError.originalError = error;
-                                    onError(enhancedError);
-                                } else if (error.message && error.message.includes('Cannot read properties')) {
-                                    // 处理属性读取错误（可能是因为响应内容不是预期的格式）
-                                    console.error(`GLB文件格式异常，可能是HTML响应: ${url}`);
-                                    const enhancedError = new Error(`GLB文件格式异常: ${error.message}`);
-                                    enhancedError.isInvalidFormat = true;
-                                    enhancedError.originalError = error;
-                                    onError(enhancedError);
-                                } else {
-                                    onError(error);
-                                }
+                    // 常规加载
+                    chunkLoader.load(
+                        url,
+                        function(data) {
+                            // 存入缓存
+                            if (CACHE_ENABLED) {
+                                resourceCache.set(url, {
+                                    data: data,
+                                    timestamp: Date.now()
+                                });
                             }
-                        );
-                    }).catch(err => {
-                        console.error('检查URL有效性时出错:', err);
-                        onError(err);
-                    });
+                            onLoad(data);
+                        },
+                        onProgress,
+                        onError
+                    );
                 }
                 
                 // 加载块
@@ -1155,46 +1050,6 @@
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
-                        
-                        // 特殊处理URL无效或格式错误的情况
-                        if (error.isInvalidUrl || error.isInvalidFormat) {
-                            console.error(`模型块 ${index} 可能路径错误或文件格式无效，将尝试备选方案`);
-                            
-                            // 检查是否已经有备选模型文件列表
-                            if (modelFiles.length > 0) {
-                                console.log('使用已配置的备选模型文件列表');
-                            } else {
-                                console.log('未找到备选模型文件，添加默认备选方案');
-                                // 添加默认备选模型文件列表
-                                const defaultFallbackFiles = [
-                                    'merged.glb',
-                                    'model.glb',
-                                    'scene.glb',
-                                    '3dmodel.glb',
-                                    'model.gltf',
-                                    'scene.gltf'
-                                ];
-                                modelFiles.push(...defaultFallbackFiles);
-                            }
-                            
-                            // 清空当前加载队列，切换到备选方案
-                            chunkLoadingQueue = [];
-                            failedChunks = [];
-                            
-                            // 通知用户正在切换加载方案
-                            const loadingText = document.querySelector('.loading-text');
-                            if (loadingText) {
-                                loadingText.textContent = '分块模型加载失败，正在尝试备选加载方案...';
-                            }
-                            
-                            // 延迟后启动备选方案
-                            setTimeout(() => {
-                                // 尝试加载单一模型文件
-                                loadModelFiles();
-                            }, 1000);
-                            
-                            return;
-                        }
                         
                         // 如果重试次数未达到上限，则添加到失败列表以便重试
                         if (retries < maxRetries) {
@@ -1455,185 +1310,6 @@
             }
         }
         
-        // 创建替代几何体（当所有模型加载都失败时显示）
-        function createFallbackGeometry() {
-            console.log('创建替代几何体作为最后的备选方案');
-            addLoadingLog('创建替代几何体作为最后的备选方案');
-            
-            // 创建一个简单的几何体
-            const geometry = new THREE.BoxGeometry(5, 1, 5);
-            
-            // 创建一个彩色材质
-            const material = new THREE.MeshPhongMaterial({
-                color: 0x2196F3,
-                transparent: true,
-                opacity: 0.8
-            });
-            
-            // 创建网格
-            const fallbackMesh = new THREE.Mesh(geometry, material);
-            fallbackMesh.name = 'FallbackModel';
-            
-            // 添加边缘线框以提高可见性
-            const edgesGeometry = new THREE.EdgesGeometry(geometry);
-            const edgesMaterial = new THREE.LineBasicMaterial({ color: 0xFFFFFF });
-            const edgesMesh = new THREE.LineSegments(edgesGeometry, edgesMaterial);
-            
-            fallbackMesh.add(edgesMesh);
-            
-            // 将替代几何体添加到场景
-            scene.add(fallbackMesh);
-            loadedModels.push(fallbackMesh);
-            
-            // 调整相机以适应替代几何体
-            adjustCamera(fallbackMesh);
-            
-            // 添加一些简单的动画效果
-            let animateFallback = () => {
-                fallbackMesh.rotation.y += 0.005;
-                requestAnimationFrame(animateFallback);
-            };
-            animateFallback();
-            
-            // 显示提示信息
-            const loadingText = document.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.textContent = '模型文件无法加载，已显示替代图形';
-                loadingText.style.color = '#FFC107'; // 黄色提示信息
-            }
-        }
-        
-        // 加载模型文件
-        function loadModelFiles() {
-            if (modelFiles.length === 0) {
-                console.log('没有模型文件可加载');
-                createFallbackGeometry();
-                return;
-            }
-            
-            // 初始化分块加载器
-            chunkLoader = initChunkLoader();
-            
-            // 获取加载容器引用
-            const loadingContainer = document.getElementById('loading-container');
-            const loadingText = document.querySelector('.loading-text');
-            
-            // 当前尝试加载的文件索引
-            let currentFileIndex = 0;
-            
-            function hideLoadingAnimation() {
-                if (loadingContainer) {
-                    console.log('隐藏加载动画');
-                    loadingContainer.classList.add('hidden');
-                }
-            }
-            
-            function showError(message) {
-                if (loadingText) {
-                    loadingText.textContent = message;
-                    loadingText.style.color = '#ff0000'; // 红色错误信息
-                }
-                console.error('模型加载错误:', message);
-                
-                // 5秒后隐藏加载动画并显示替代几何体
-                setTimeout(() => {
-                    hideLoadingAnimation();
-                    createFallbackGeometry();
-                }, 3000);
-            }
-            
-            // 尝试加载下一个模型文件
-            function tryNextModelFile() {
-                if (currentFileIndex >= modelFiles.length) {
-                    console.error('所有备选模型文件加载失败');
-                    showError('所有备选模型文件加载失败');
-                    return;
-                }
-                
-                // 加载当前索引的模型文件
-                const modelFile = modelFiles[currentFileIndex];
-                currentFileIndex++;
-                
-                if (loadingText) {
-                    loadingText.textContent = `正在加载模型: ${modelFile} (${currentFileIndex}/${modelFiles.length})`;
-                }
-                
-                console.log('开始加载模型文件:', modelFile);
-                addLoadingLog(`开始加载模型文件: ${modelFile} (${currentFileIndex}/${modelFiles.length})`);
-                
-                chunkLoader.load(
-                    modelFile,
-                    function(gltf) {
-                        console.log('模型加载成功:', modelFile);
-                        addLoadingLog(`模型加载成功: ${modelFile}`);
-                        
-                        const model = gltf.scene;
-                        loadedModels.push(model);
-                        
-                        // 优化模型处理 - 简化光照计算
-                        model.traverse(function(child) {
-                            if (child.isMesh) {
-                                child.castShadow = false;
-                                child.receiveShadow = false;
-                                // 减少材质复杂度
-                                if (child.material) {
-                                    child.material.envMapIntensity = 0.5;
-                                }
-                            }
-                        });
-                        
-                        // 让模型横向显示 - 旋转-90度（修正方向）
-                        model.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
-                        
-                        scene.add(model);
-                        
-                        // 调整相机
-                        adjustCamera(model);
-                        
-                        // 添加渐进式加载更新
-                        startProgressiveLoadingUpdate(model);
-                        
-                        // 隐藏加载动画
-                        setTimeout(hideLoadingAnimation, 1000);
-                    },
-                    function(xhr) {
-                        // 显示加载进度
-                        if (xhr.lengthComputable && loadingText) {
-                            const percent = Math.round((xhr.loaded / xhr.total) * 100);
-                            loadingText.textContent = `正在加载模型: ${percent}%`;
-                        }
-                    },
-                    function(error) {
-                        console.error(`模型加载失败:`, error);
-                        
-                        // 特殊处理内存不足错误
-                        if (error.message && (error.message.includes('out of memory') || error.message.includes('内存不足'))) {
-                            showError('浏览器内存不足，正在尝试优化加载方式...');
-                            // 尝试使用更低内存的加载方式
-                            setTimeout(() => {
-                                tryLowMemoryLoading(modelFile);
-                            }, 2000);
-                            return;
-                        }
-                        
-                        // 如果还有备选文件，尝试下一个
-                        if (currentFileIndex < modelFiles.length) {
-                            console.log(`尝试下一个备选模型文件 (${currentFileIndex}/${modelFiles.length})`);
-                            addLoadingLog(`模型文件 ${modelFile} 加载失败，尝试下一个备选`, true);
-                            
-                            // 短暂延迟后尝试下一个文件
-                            setTimeout(tryNextModelFile, 1000);
-                        } else {
-                            showError('所有备选模型文件加载失败');
-                        }
-                    }
-                );
-            }
-            
-            // 开始尝试加载模型文件
-            tryNextModelFile();
-        }
-        
         // 初始化应用
         function initApp() {
             // 设置日志切换
@@ -1668,6 +1344,9 @@
                     }, 5000);
                 }
                 
+                // 注意：现在modelFiles可能为空，因为分块加载通过loadPreChunkedModel函数处理
+                // 所以我们不再在这里加载模型，而是由checkForChunksDirectory和loadPreChunkedModel函数处理
+                
             } catch (error) {
                 const errorMsg = `应用初始化失败: ${error.message}`;
                 console.error(errorMsg);
@@ -1685,84 +1364,6 @@
                     loadingContainer.classList.add('hidden');
                 }, 5000);
             }
-        }
-        
-        // 尝试低内存加载方式
-        function tryLowMemoryLoading(modelFile) {
-            console.log('尝试低内存加载方式:', modelFile);
-            addLoadingLog('尝试低内存加载方式...');
-            
-            const loadingText = document.querySelector('.loading-text');
-            if (loadingText) {
-                loadingText.textContent = '正在尝试低内存加载方式...';
-            }
-            
-            // 创建一个更简单的加载器配置
-            const lowMemoryLoader = new THREE.GLTFLoader();
-            
-            // 尝试加载模型，但设置较低的内存占用选项
-            lowMemoryLoader.load(
-                modelFile,
-                function(gltf) {
-                    console.log('低内存模式模型加载成功');
-                    addLoadingLog('低内存模式模型加载成功');
-                    
-                    const model = gltf.scene;
-                    loadedModels.push(model);
-                    
-                    // 进一步优化以减少内存使用
-                    model.traverse(function(child) {
-                        if (child.isMesh) {
-                            // 禁用阴影
-                            child.castShadow = false;
-                            child.receiveShadow = false;
-                            
-                            // 降低材质质量
-                            if (child.material) {
-                                // 移除纹理以节省内存
-                                if (child.material.map) {
-                                    child.material.map.dispose();
-                                    child.material.map = null;
-                                }
-                                // 使用更简单的着色方式
-                                child.material.envMap = null;
-                                child.material.metalness = 0;
-                                child.material.roughness = 1;
-                            }
-                        }
-                    });
-                    
-                    // 让模型横向显示
-                    model.rotation.x = -Math.PI / 2;
-                    
-                    scene.add(model);
-                    
-                    // 调整相机
-                    adjustCamera(model);
-                    
-                    // 隐藏加载动画
-                    const loadingContainer = document.getElementById('loading-container');
-                    if (loadingContainer) {
-                        setTimeout(() => {
-                            loadingContainer.classList.add('hidden');
-                        }, 1000);
-                    }
-                },
-                function(xhr) {
-                    // 显示加载进度
-                    if (xhr.lengthComputable && loadingText) {
-                        const percent = Math.round((xhr.loaded / xhr.total) * 100);
-                        loadingText.textContent = `低内存模式加载: ${percent}%`;
-                    }
-                },
-                function(error) {
-                    console.error('低内存模式加载失败:', error);
-                    addLoadingLog('低内存模式加载失败', true);
-                    
-                    // 所有尝试都失败，创建替代几何体
-                    createFallbackGeometry();
-                }
-            );
         }
         
         // 当页面加载完成后初始化应用
