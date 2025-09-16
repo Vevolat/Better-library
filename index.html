@@ -902,6 +902,12 @@
                         // 使用fetch API获取文件，然后手动解析，以便更好地控制错误处理
                         fetch(url)
                             .then(response => {
+                                // 检查响应头中的Content-Type
+                                const contentType = response.headers.get('content-type');
+                                if (contentType && contentType.includes('text/html')) {
+                                    throw new Error(`服务器返回了HTML内容，而不是GLB文件。状态码: ${response.status}`);
+                                }
+                                
                                 if (!response.ok) {
                                     throw new Error(`HTTP错误! 状态: ${response.status}`);
                                 }
@@ -912,12 +918,19 @@
                                 const uint8Array = new Uint8Array(buffer.slice(0, 4));
                                 const headerStr = String.fromCharCode.apply(null, uint8Array);
                                 
-                                // 允许glTF头或'vers'开头的文件（特殊格式支持）
-                                if (headerStr !== 'glTF' && headerStr !== 'vers') {
-                                    throw new Error(`文件不是有效的GLB格式或支持的特殊格式，开头字符: ${headerStr}`);
+                                // 检查是否是HTML内容（通常以<!DOCTYPE或<html开头）
+                                const firstBytes = String.fromCharCode.apply(null, uint8Array.slice(0, 2));
+                                if (firstBytes === '<!' || firstBytes === '<h') {
+                                    throw new Error(`检测到HTML内容，不是有效的GLB文件。这可能是服务器配置问题或URL错误。`);
                                 }
                                 
-                                // 使用loader解析文件（对'vers'开头的特殊格式也尝试解析）
+                                // 允许glTF头或尝试解析其他格式
+                                if (headerStr !== 'glTF') {
+                                    // 对于非标准格式，记录日志但仍尝试解析
+                                    console.warn(`警告: 模型块 ${index} 文件格式不标准，开头字符: ${headerStr}，将尝试解析`);
+                                }
+                                
+                                // 尝试使用loader解析文件
                                 loader.parse(
                                     buffer,
                                     '',
@@ -942,11 +955,13 @@
                                 
                                 // 特殊处理常见错误
                                 if (error.message.includes('Unexpected token')) {
-                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这可能是服务器配置问题。`;
+                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这很可能是服务器配置问题，导致返回了HTML页面而不是GLB文件。`;
                                 } else if (error.message.includes('404')) {
                                     errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。`;
+                                } else if (error.message.includes('HTML')) {
+                                    errorMessage = `加载失败: 检测到HTML内容，而不是GLB文件。请检查服务器配置。`;
                                 } else if (error.message.includes('GLB') || error.message.includes('glTF')) {
-                                    errorMessage = `加载失败: 文件不是有效的GLB格式或支持的特殊格式。`;
+                                    errorMessage = `加载失败: 文件不是有效的GLB格式。`;
                                 }
                                 
                                 console.error(`模型块 ${index} 加载错误:`, error);
