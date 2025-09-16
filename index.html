@@ -950,63 +950,34 @@
             // 为了防止并发请求过多导致的问题，添加小延迟
             setTimeout(() => {
                 // 创建带有缓存的加载函数
-            function loadWithCache(url, onLoad, onProgress, onError) {
-                if (CACHE_ENABLED && resourceCache.has(url)) {
-                    const cachedItem = resourceCache.get(url);
-                    // 检查缓存是否过期
-                    if (Date.now() - cachedItem.timestamp < CACHE_EXPIRE_TIME) {
-                        addLoadingLog(`从缓存加载块 ${index}`);
-                        onLoad(cachedItem.data);
-                        return;
-                    }
-                }
-                
-                // 先验证文件是否存在且格式正确
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', url, true);
-                xhr.responseType = 'arraybuffer';
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        // 验证是否为有效的二进制文件
-                        const byteArray = new Uint8Array(xhr.response);
-                        // GLB文件魔数检查 (47 4C 42 00 - "GLB\0")
-                        const isGLB = byteArray.length >= 4 && 
-                                     byteArray[0] === 0x47 && byteArray[1] === 0x4C && 
-                                     byteArray[2] === 0x42 && byteArray[3] === 0x00;
-                        
-                        if (!isGLB) {
-                            const errorMsg = `文件 ${url} 不是有效的GLB文件，检测到可能是HTML内容`;
-                            console.error(errorMsg);
-                            addLoadingLog(errorMsg, true);
-                            onError(new Error('无效的GLB文件格式'));
+                function loadWithCache(url, onLoad, onProgress, onError) {
+                    if (CACHE_ENABLED && resourceCache.has(url)) {
+                        const cachedItem = resourceCache.get(url);
+                        // 检查缓存是否过期
+                        if (Date.now() - cachedItem.timestamp < CACHE_EXPIRE_TIME) {
+                            addLoadingLog(`从缓存加载块 ${index}`);
+                            onLoad(cachedItem.data);
                             return;
                         }
-                        
-                        // 文件有效，使用chunkLoader加载
-                        chunkLoader.parse(
-                            xhr.response,
-                            '', // base path
-                            function(data) {
-                                // 存入缓存
-                                if (CACHE_ENABLED) {
-                                    resourceCache.set(url, {
-                                        data: data,
-                                        timestamp: Date.now()
-                                    });
-                                }
-                                onLoad(data);
-                            },
-                            onError
-                        );
-                    } else {
-                        onError(new Error(`无法加载文件，状态码: ${xhr.status}`));
                     }
-                };
-                xhr.onerror = function() {
-                    onError(new Error('网络错误，无法加载文件'));
-                };
-                xhr.send();
-            }
+                    
+                    // 常规加载
+                    chunkLoader.load(
+                        url,
+                        function(data) {
+                            // 存入缓存
+                            if (CACHE_ENABLED) {
+                                resourceCache.set(url, {
+                                    data: data,
+                                    timestamp: Date.now()
+                                });
+                            }
+                            onLoad(data);
+                        },
+                        onProgress,
+                        onError
+                    );
+                }
                 
                 // 加载块
                 loadWithCache(
