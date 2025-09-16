@@ -855,6 +855,73 @@
             return distanceFromCenter;
         }
         
+        // 加载下一批分块
+        function loadNextChunks() {
+            // 检查是否还有块需要加载
+            if (chunkLoadingQueue.length === 0) {
+                console.log('所有分块模型加载完成');
+                onAllChunksLoaded();
+                return;
+            }
+            
+            // 计算当前正在加载的块数量
+            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
+            
+            // 如果当前加载的块数量少于最大并发数，则加载更多块
+            const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
+            
+            console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
+            
+            for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
+                const nextChunk = chunkLoadingQueue.shift();
+                loadChunk(nextChunk);
+            }
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // 计算加载速度
+        function calculateLoadSpeed(bytesLoaded) {
+            const currentTime = Date.now();
+            const timeDiff = (currentTime - lastLoadedTime) / 1000; // 转换为秒
+            const bytesDiff = bytesLoaded - lastLoadedBytes;
+            
+            if (timeDiff > 0) {
+                const speed = bytesDiff / timeDiff; // B/s
+                averageLoadSpeed = averageLoadSpeed * 0.7 + speed * 0.3; // 平滑处理
+                
+                lastLoadedTime = currentTime;
+                lastLoadedBytes = bytesLoaded;
+            }
+            
+            return averageLoadSpeed;
+        }
+        
+        // 计算预计剩余时间
+        function calculateRemainingTime() {
+            if (totalBytesLoaded === 0 || totalBytesToLoad === 0) return '未知';
+            
+            const remainingBytes = totalBytesToLoad - totalBytesLoaded;
+            const speed = calculateLoadSpeed(totalBytesLoaded);
+            
+            if (speed === 0) return '未知';
+            
+            const remainingSeconds = Math.round(remainingBytes / speed);
+            
+            if (remainingSeconds < 60) {
+                return `${remainingSeconds}秒`;
+            } else {
+                const minutes = Math.floor(remainingSeconds / 60);
+                const seconds = remainingSeconds % 60;
+                return `${minutes}分${seconds}秒`;
+            }
+        }
+        
         // 加载单个分块
         function loadChunk(chunkInfo) {
             const { url, index, retries = 0 } = chunkInfo;
@@ -866,8 +933,7 @@
                 loading: true,
                 loaded: false,
                 object: null,
-                retries: retries,
-                startTime: Date.now()
+                retries: retries
             };
             
             const logMsg = `开始加载模型块 ${index}/${totalChunksCount}: ${url}${retries > 0 ? ` (重试 ${retries}/${maxRetries})` : ''}`;
@@ -895,236 +961,28 @@
                         }
                     }
                     
-                    try {
-                        // 使用与initChunkLoader完全相同的加载器配置
-                        const loader = initChunkLoader();
-                        
-                        // 使用fetch API获取文件，然后手动解析，以便更好地控制错误处理
-                        fetch(url)
-                            .then(response => {
-                                // 检查响应头中的Content-Type
-                                const contentType = response.headers.get('content-type');
-                                if (contentType && contentType.includes('text/html')) {
-                                    throw new Error(`服务器返回了HTML内容，而不是GLB文件。状态码: ${response.status}`);
-                                }
-                                
-                                if (!response.ok) {
-                                    throw new Error(`HTTP错误! 状态: ${response.status}`);
-                                }
-                                return response.arrayBuffer();
-                            })
-                            .then(buffer => {
-                                // 验证文件是否包含glTF头或其他有效格式
-                                const uint8Array = new Uint8Array(buffer.slice(0, 8));
-                                const headerStr = String.fromCharCode.apply(null, uint8Array.slice(0, 4));
-                                const header8Str = String.fromCharCode.apply(null, uint8Array);
-                                
-                                console.log(`模型块 ${index} 接收到的文件头: "${headerStr}"，完整8字节头: "${header8Str}"`);
-                                
-                                // 提取前30个字符以便调试
-                                const preview = String.fromCharCode.apply(null, new Uint8Array(buffer.slice(0, 30)));
-                                
-                                // 检查是否是HTML内容（常见的HTML开头模式）
-                                const isHTML = 
-                                    header8Str.startsWith('<!DOCTYPE') || 
-                                    header8Str.startsWith('<html') || 
-                                    header8Str.startsWith('<!doctype') || 
-                                    header8Str.startsWith('<HTML') || 
-                                    header8Str.startsWith('<h') || 
-                                    header8Str.startsWith('<?xml');
-                                
-                                // 特殊处理：如果检测到version字符串但文件应该是GLB
-                                const hasVersionPrefix = headerStr.startsWith('vers');
-                                
-                                // 检测是否是Git LFS指针文件
-                                const isGitLFS = preview.includes('git-lfs.github');
-                                
-                                if (isHTML) {
-                                    throw new Error(`检测到HTML内容，不是有效的GLB文件。前几个字符: "${preview}"。这很可能是Netlify服务器配置问题或URL大小写问题。`);
-                                } else if (isGitLFS) {
-                                    console.error(`警告: 模型块 ${index} 检测到Git LFS指针文件，不是实际的GLB文件内容。前几个字符: "${preview}"`);
-                                    throw new Error(`检测到Git LFS指针文件，不是实际的GLB文件内容。这表明仓库使用了Git LFS，但Netlify未正确配置来处理这些文件。\n\n在Netlify环境中，请确保：\n1. 启用Netlify Large Media功能\n2. 正确配置Git LFS和Netlify集成\n3. 或者将实际的GLB文件直接提交到仓库而不使用Git LFS`);
-                                } else if (hasVersionPrefix) {
-                                    console.warn(`警告: 模型块 ${index} 检测到version前缀，这可能是Git LFS指针文件或服务器配置问题。前几个字符: "${preview}"`);
-                                    // 对于这种特殊情况，我们仍然尝试解析，但标记为可能的问题
-                                    try {
-                                        // 尝试使用loader解析文件
-                                        loader.parse(
-                                            buffer,
-                                            '',
-                                            function(gltf) {
-                                                // 存入缓存
-                                                if (CACHE_ENABLED) {
-                                                    resourceCache.set(url, {
-                                                        data: gltf,
-                                                        timestamp: Date.now()
-                                                    });
-                                                }
-                                                onLoad(gltf);
-                                            },
-                                            function(error) {
-                                                // 如果解析失败，尝试使用备用URL
-                                                console.error(`解析失败，尝试使用备用大小写URL`);
-                                                // 尝试使用备用URL（改变大小写）
-                                                const altUrl = url.includes('mx2/') ? url.replace('mx2/', 'MX2/') : url.replace('MX2/', 'mx2/');
-                                                console.log(`尝试备用URL: ${altUrl}`);
-                                                loadWithAltUrl(altUrl, loader, index, onLoad, onError);
-                                            }
-                                        );
-                                        return; // 避免继续执行下面的代码
-                                    } catch (e) {
-                                        throw new Error(`处理version前缀文件时出错: ${e.message}。前几个字符: "${preview}"`);
-                                    }
-                                }
-                                
-                                // 如果是有效的glTF头，直接处理
-                                if (headerStr === 'glTF') {
-                                    console.log(`模型块 ${index} 检测到有效GLB文件头，开始解析`);
-                                } else {
-                                    // 对于非标准格式，记录日志但仍尝试解析
-                                    console.warn(`警告: 模型块 ${index} 文件格式不标准，开头字符: "${headerStr}"，前30字符: "${preview}"，将尝试解析`);
-                                }
-                                
-                                // 尝试使用loader解析文件
-                                loader.parse(
-                                    buffer,
-                                    '',
-                                    function(gltf) {
-                                        // 存入缓存
-                                        if (CACHE_ENABLED) {
-                                            resourceCache.set(url, {
-                                                data: gltf,
-                                                timestamp: Date.now()
-                                            });
-                                        }
-                                        onLoad(gltf);
-                                    },
-                                    function(error) {
-                                        throw new Error(`解析错误: ${error.message}`);
-                                    }
-                                );
-                            })
-                            .catch(error => {
-                                // 增强的错误处理，特别针对Netlify环境
-                                let errorMessage = `加载失败: ${error.message}`;
-                                
-                                // 特殊处理常见错误
-                                if (error.message.includes('Unexpected token')) {
-                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这很可能是服务器配置问题，导致返回了HTML页面而不是GLB文件。\n\n在Netlify环境中，请确保：\n1. 在_netlify.toml文件中正确配置了静态文件处理规则\n2. 没有错误的重定向规则影响到.glb文件请求\n3. 检查文件大小写是否与引用一致（Netlify是区分大小写的）`;
-                                } else if (error.message.includes('404')) {
-                                    errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。\n\n在Netlify环境中，请特别注意：\n1. 文件路径区分大小写\n2. 确保文件已正确部署到服务器\n3. 检查Netlify构建日志，确认文件是否被正确包含`;
-                                } else if (error.message.includes('HTML')) {
-                                    errorMessage = `加载失败: 检测到HTML内容，而不是GLB文件。这是典型的Netlify服务器配置问题。\n\n建议解决方案：\n1. 创建或修改_netlify.toml文件\n2. 添加正确的静态文件处理规则\n3. 确保重定向规则不会拦截.glb文件请求`;
-                                } else if (error.message.includes('GLB') || error.message.includes('glTF')) {
-                                    errorMessage = `加载失败: 文件不是有效的GLB格式。\n\n在Netlify环境中，这可能是因为：\n1. 服务器返回了HTML错误页面而非实际文件\n2. 静态文件MIME类型配置不正确\n3. 资源请求被重定向或拦截`;
-                                }
-                                
-                                console.error(`模型块 ${index} 加载错误:`, error);
-                                console.error(errorMessage);
-                                onError(new Error(errorMessage));
-                            });
-                    } catch (e) {
-                        console.error(`loadWithCache函数内部错误:`, e);
-                        onError(new Error(`加载过程中发生内部错误: ${e.message}`));
-                    }
-                }
-                
-                // 备用URL加载函数，用于处理大小写问题
-                function loadWithAltUrl(altUrl, loader, index, onLoad, onError) {
-                    console.log(`开始使用备用URL加载模型块 ${index}: ${altUrl}`);
-                    
-                    // 使用XMLHttpRequest加载备用URL
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('GET', altUrl, true);
-                    xhr.responseType = 'arraybuffer';
-                    
-                    xhr.onload = function() {
-                        if (xhr.status === 200) {
-                            console.log(`备用URL加载成功，开始解析模型块 ${index}`);
-                            const buffer = xhr.response;
-                            
-                            // 验证文件格式
-                            const uint8Array = new Uint8Array(buffer.slice(0, 4));
-                            const headerStr = String.fromCharCode.apply(null, uint8Array);
-                            
-                            if (headerStr !== 'glTF') {
-                                console.warn(`警告: 备用URL加载的模型块 ${index} 文件格式不标准，开头字符: "${headerStr}"`);
+                    // 常规加载
+                    chunkLoader.load(
+                        url,
+                        function(data) {
+                            // 存入缓存
+                            if (CACHE_ENABLED) {
+                                resourceCache.set(url, {
+                                    data: data,
+                                    timestamp: Date.now()
+                                });
                             }
-                            
-                            // 解析文件
-                            loader.parse(
-                                buffer,
-                                '',
-                                function(gltf) {
-                                    console.log(`备用URL模型块 ${index} 解析成功`);
-                                    onLoad(gltf);
-                                },
-                                function(error) {
-                                    console.error(`备用URL模型块 ${index} 解析失败:`, error);
-                                    onError(new Error(`备用URL解析失败: ${error.message}。请检查文件路径大小写或服务器配置。`));
-                                }
-                            );
-                        } else {
-                            console.error(`备用URL加载失败，状态码: ${xhr.status}`);
-                            onError(new Error(`备用URL加载失败，状态码: ${xhr.status}。请检查文件路径大小写或服务器配置。`));
-                        }
-                    };
-                    
-                    xhr.onerror = function() {
-                        console.error(`备用URL网络错误`);
-                        onError(new Error(`备用URL网络错误。请检查文件路径大小写或服务器配置。`));
-                    };
-                    
-                    xhr.send();
+                            onLoad(data);
+                        },
+                        onProgress,
+                        onError
+                    );
                 }
-                
-                // 加载超时处理函数
-                const timeoutId = setTimeout(() => {
-                    const timeoutMsg = `模型块 ${index} 加载超时，将重试`;
-                    console.error(timeoutMsg);
-                    addLoadingLog(timeoutMsg, true);
-                    
-                    // 取消当前加载（尝试中止底层请求）
-                    if (chunkLoader.manager && chunkLoader.manager.handlers) {
-                        for (const handler of Object.values(chunkLoader.manager.handlers)) {
-                            if (handler && handler.resourcePath === url) {
-                                try {
-                                    handler.abort();
-                                } catch (e) {}
-                            }
-                        }
-                    }
-                    
-                    // 如果重试次数未达到上限，则重试
-                    if (retries < maxRetries) {
-                        addLoadingLog(`将重试加载模型块 ${index}`);
-                        // 添加到失败列表，稍后重试
-                        failedChunks.push({
-                            url: url,
-                            index: index,
-                            retries: retries + 1
-                        });
-                    } else {
-                        addLoadingLog(`模型块 ${index} 达到最大重试次数，不再重试`, true);
-                        // 标记此块为加载失败
-                        modelChunks[index] = {
-                            loading: false,
-                            loaded: false,
-                            error: new Error('加载超时')
-                        };
-                    }
-                    
-                    // 继续加载下一批块
-                    loadNextChunks();
-                }, 30000); // 30秒超时
                 
                 // 加载块
                 loadWithCache(
                     url,
                     function(gltf) {
-                        // 清除超时定时器
-                        clearTimeout(timeoutId);
-                        
                         const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
                         console.log(successMsg);
                         addLoadingLog(successMsg);
@@ -1153,7 +1011,7 @@
                         // 更新加载进度
                         updateLoadingProgress();
                         
-                        // 加载下一批块 - 即使当前块加载完成也继续加载
+                        // 加载下一批块
                         loadNextChunks();
                         
                     },
@@ -1189,9 +1047,6 @@
                         }
                     },
                     function(error) {
-                        // 清除超时定时器
-                        clearTimeout(timeoutId);
-                        
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
@@ -1223,70 +1078,57 @@
                         loadNextChunks();
                     }
                 );
-            }, 50); // 减少延迟，提高加载速度，不再使用 index * 100
+            }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
         }
-
-        // 加载下一批分块
-        function loadNextChunks() {
-            // 检查是否还有块需要加载
-            if (chunkLoadingQueue.length === 0) {
-                console.log('所有分块模型加载完成');
-                onAllChunksLoaded();
-                return;
-            }
-
-            // 计算当前正在加载的块数量
-            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
-
-            // 如果当前加载的块数量少于最大并发数，则加载更多块
-            const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
-
-            console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
-
-            for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
-                const nextChunk = chunkLoadingQueue.shift();
-                loadChunk(nextChunk);
-            }
-
-            // 特殊处理：如果队列不为空但没有启动新的加载（可能是因为并发限制），
-            // 则定期检查是否可以加载更多块
-            if (chunkLoadingQueue.length > 0 && chunksToLoad <= 0) {
-                setTimeout(() => {
-                    // 再次检查是否有活跃的加载减少，以便加载更多块
-                    const currentActiveLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
-                    if (currentActiveLoads < maxConcurrentChunkLoads) {
-                        loadNextChunks();
+        
+        // 优化块模型
+        function optimizeChunkModel(model, chunkIndex) {
+            // 设置块模型的属性
+            model.name = `ModelChunk_${chunkIndex}`;
+            
+            // 简化光照计算
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                    
+                    // 减少材质复杂度
+                    if (child.material) {
+                        child.material.envMapIntensity = 0.5;
                     }
-                }, 500); // 500ms后再次检查
-            }
+                }
+            });
+            
+            // 让模型横向显示 - 旋转-90度（修正方向）
+            model.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
         }
-
+        
         // 更新加载进度显示
         function updateLoadingProgress() {
             const loadingText = document.querySelector('.loading-text');
             const progressBar = document.querySelector('.progress-bar');
-
+            
             if (loadingText && totalChunksCount > 0) {
                 // 计算块加载百分比
                 const chunkPercent = Math.round((loadedChunksCount / totalChunksCount) * 100);
-
+                
                 // 计算文件大小加载百分比（如果有数据）
                 let sizePercent = 0;
                 if (totalBytesToLoad > 0) {
                     sizePercent = Math.round((totalBytesLoaded / totalBytesToLoad) * 100);
                 }
-
+                
                 // 显示综合进度信息
                 const speed = calculateLoadSpeed(totalBytesLoaded);
                 const remainingTime = calculateRemainingTime();
-
+                
                 loadingText.textContent = `正在加载: ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
-
+                
                 if (progressBar) {
                     // 使用文件大小百分比更准确地反映加载进度
                     const displayPercent = totalBytesToLoad > 0 ? sizePercent : chunkPercent;
                     progressBar.style.width = `${displayPercent}%`;
-
+                    
                     // 根据进度改变进度条颜色
                     if (displayPercent >= 90) {
                         progressBar.style.backgroundColor = '#4CAF50';
@@ -1297,70 +1139,6 @@
                     }
                 }
             }
-        }
-
-        // 计算加载速度
-        function calculateLoadSpeed(bytesLoaded) {
-            const currentTime = Date.now();
-            const elapsedTime = (currentTime - lastLoadedTime) / 1000; // 秒
-            const speed = bytesLoaded / elapsedTime;
-            return speed;
-        }
-
-        // 计算剩余时间
-        function calculateRemainingTime() {
-            const speed = calculateLoadSpeed(totalBytesLoaded);
-            if (speed === 0) return '计算中...';
-            
-            const remainingBytes = totalBytesToLoad - totalBytesLoaded;
-            const remainingSeconds = remainingBytes / speed;
-            
-            if (remainingSeconds < 60) {
-                return `${Math.round(remainingSeconds)}秒`;
-            } else if (remainingSeconds < 3600) {
-                return `${Math.round(remainingSeconds / 60)}分钟`;
-            } else {
-                return `${Math.round(remainingSeconds / 3600)}小时`;
-            }
-        }
-
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-        
-        // 优化单个模型块
-        function optimizeChunkModel(chunkModel, chunkIndex) {
-            // 对块模型进行优化处理
-            chunkModel.traverse(function(child) {
-                if (child.isMesh) {
-                    // 禁用阴影计算以提高性能
-                    child.castShadow = false;
-                    child.receiveShadow = false;
-                    
-                    // 简化材质以降低内存使用
-                    if (child.material) {
-                        child.material.envMapIntensity = 0.5;
-                        
-                        // 对于低优先级或远距离的块，可以进一步降低质量
-                        // 这里根据块索引进行简单的质量分级
-                        if (chunkIndex % 5 === 0) { // 每隔5个块降低一些质量
-                            child.material.needsUpdate = true;
-                        }
-                    }
-                }
-            });
-            
-            // 让模型横向显示 - 旋转-90度（修正方向）
-            chunkModel.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
-            
-            console.log(`优化模型块 ${chunkIndex} 完成`);
         }
         
         // 所有分块加载完成后的处理
@@ -1391,10 +1169,9 @@
                 return;
             }
             
-            // 强制完成检查：即使有一些块加载失败，也允许继续
-            // 计算已加载时间
-            const currentTime = Date.now();
-            const elapsedTime = Math.round((currentTime - startTime) / 1000);
+            const completeMsg = '分块模型加载完成';
+            console.log(completeMsg);
+            addLoadingLog(completeMsg);
             
             // 获取成功加载的块数量
             const successfullyLoadedCount = Object.values(modelChunks).filter(chunk => chunk.loaded).length;
@@ -1416,8 +1193,8 @@
                 progressBar.style.backgroundColor = '#4CAF50';
             }
             
-            // 降低加载成功率的阈值，允许更多的块加载失败但仍能继续
-            if (successfullyLoadedCount / totalChunksCount < 0.3) {
+            // 如果加载成功率低于50%，显示错误并创建替代几何体
+            if (successfullyLoadedCount / totalChunksCount < 0.5) {
                 console.log(`加载成功率过低: ${(successfullyLoadedCount / totalChunksCount * 100).toFixed(1)}%`);
                 const errorMsg = '模型分块加载失败率过高';
                 console.error(errorMsg);
