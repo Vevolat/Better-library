@@ -721,29 +721,7 @@
             });
         }
         
-        // 创建替代几何体
-        function createFallbackGeometry() {
-            console.log('创建替代几何体');
-            
-            // 创建一个简单的立方体
-            const geometry = new THREE.BoxGeometry(2, 2, 2);
-            const material = new THREE.MeshBasicMaterial({
-                color: 0x00ff00,
-                wireframe: true
-            });
-            
-            const cube = new THREE.Mesh(geometry, material);
-            scene.add(cube);
-            loadedModels.push(cube);
-            
-            // 调整相机
-            adjustCamera(cube);
-            
-            // 隐藏加载动画
-            setTimeout(() => {
-                document.getElementById('loading-container').classList.add('hidden');
-            }, 500);
-        }
+
         
         // 调整相机以适合模型
         function adjustCamera(model) {
