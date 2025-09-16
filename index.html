@@ -553,14 +553,16 @@
                 modelChunks[chunkIndex].loaded = true;
                 modelChunks[chunkIndex].forceLoaded = true;
                 
-                // 计算块大小
-                    const chunkSize = gltf.byteLength || 0;
-                    
-                    const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url} (${formatFileSize(chunkSize)})`;
-                    console.log(successMsg);
-                    addLoadingLog(successMsg);
-                    
-                    // 增加已加载块计数
+                // 修复：不再引用未定义的gltf变量，使用估算的块大小
+                const chunkSize = modelChunks[chunkIndex].size || 0;
+                const index = chunkIndex;
+                const url = modelChunks[chunkIndex].url || `mx2/___0000005_${chunkIndex.toString().padStart(7, '0')}.glb`;
+                
+                const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url} (${formatFileSize(chunkSize)})`;
+                console.log(successMsg);
+                addLoadingLog(successMsg);
+                
+                // 增加已加载块计数
                 loadedChunksCount++;
                 loadingStats.successLoads++;
                 loadingStats.activeLoads--;
@@ -1180,14 +1182,17 @@
             
             // 构建块加载队列 - 按照块索引顺序加载
             for (let i = 0; i < totalChunksCount; i++) {
-                const chunkIndex = String(i).padStart(7, '0');
-                const chunkUrl = `mx2/___0000005_${chunkIndex}.glb`;
-            
+                // 修复URL构建，确保它与实际文件路径匹配
+                // 直接使用完整文件名格式，避免路径解析问题
+                const chunkUrl = `mx2/___0000005_${String(i).padStart(7, '0')}.glb`;
+                
                 // 添加到加载队列
                 chunkLoadingQueue.push({
                     url: chunkUrl,
                     index: i,
-                    priority: calculateChunkPriority(i) // 计算块的加载优先级
+                    priority: calculateChunkPriority(i), // 计算块的加载优先级
+                    // 存储块大小信息，用于后续估算
+                    size: 500000 // 估算每个块的大小为500KB
                 });
             }
             
