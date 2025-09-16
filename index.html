@@ -855,73 +855,6 @@
             return distanceFromCenter;
         }
         
-        // 加载下一批分块
-        function loadNextChunks() {
-            // 检查是否还有块需要加载
-            if (chunkLoadingQueue.length === 0) {
-                console.log('所有分块模型加载完成');
-                onAllChunksLoaded();
-                return;
-            }
-            
-            // 计算当前正在加载的块数量
-            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
-            
-            // 如果当前加载的块数量少于最大并发数，则加载更多块
-            const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
-            
-            console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
-            
-            for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
-                const nextChunk = chunkLoadingQueue.shift();
-                loadChunk(nextChunk);
-            }
-        }
-        
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            else return (bytes / 1048576).toFixed(1) + ' MB';
-        }
-        
-        // 计算加载速度
-        function calculateLoadSpeed(bytesLoaded) {
-            const currentTime = Date.now();
-            const timeDiff = (currentTime - lastLoadedTime) / 1000; // 转换为秒
-            const bytesDiff = bytesLoaded - lastLoadedBytes;
-            
-            if (timeDiff > 0) {
-                const speed = bytesDiff / timeDiff; // B/s
-                averageLoadSpeed = averageLoadSpeed * 0.7 + speed * 0.3; // 平滑处理
-                
-                lastLoadedTime = currentTime;
-                lastLoadedBytes = bytesLoaded;
-            }
-            
-            return averageLoadSpeed;
-        }
-        
-        // 计算预计剩余时间
-        function calculateRemainingTime() {
-            if (totalBytesLoaded === 0 || totalBytesToLoad === 0) return '未知';
-            
-            const remainingBytes = totalBytesToLoad - totalBytesLoaded;
-            const speed = calculateLoadSpeed(totalBytesLoaded);
-            
-            if (speed === 0) return '未知';
-            
-            const remainingSeconds = Math.round(remainingBytes / speed);
-            
-            if (remainingSeconds < 60) {
-                return `${remainingSeconds}秒`;
-            } else {
-                const minutes = Math.floor(remainingSeconds / 60);
-                const seconds = remainingSeconds % 60;
-                return `${minutes}分${seconds}秒`;
-            }
-        }
-        
         // 加载单个分块
         function loadChunk(chunkInfo) {
             const { url, index, retries = 0 } = chunkInfo;
@@ -933,7 +866,8 @@
                 loading: true,
                 loaded: false,
                 object: null,
-                retries: retries
+                retries: retries,
+                startTime: Date.now()
             };
             
             const logMsg = `开始加载模型块 ${index}/${totalChunksCount}: ${url}${retries > 0 ? ` (重试 ${retries}/${maxRetries})` : ''}`;
@@ -979,10 +913,53 @@
                     );
                 }
                 
+                // 加载超时处理函数
+                const timeoutId = setTimeout(() => {
+                    const timeoutMsg = `模型块 ${index} 加载超时，将重试`;
+                    console.error(timeoutMsg);
+                    addLoadingLog(timeoutMsg, true);
+                    
+                    // 取消当前加载（尝试中止底层请求）
+                    if (chunkLoader.manager && chunkLoader.manager.handlers) {
+                        for (const handler of Object.values(chunkLoader.manager.handlers)) {
+                            if (handler && handler.resourcePath === url) {
+                                try {
+                                    handler.abort();
+                                } catch (e) {}
+                            }
+                        }
+                    }
+                    
+                    // 如果重试次数未达到上限，则重试
+                    if (retries < maxRetries) {
+                        addLoadingLog(`将重试加载模型块 ${index}`);
+                        // 添加到失败列表，稍后重试
+                        failedChunks.push({
+                            url: url,
+                            index: index,
+                            retries: retries + 1
+                        });
+                    } else {
+                        addLoadingLog(`模型块 ${index} 达到最大重试次数，不再重试`, true);
+                        // 标记此块为加载失败
+                        modelChunks[index] = {
+                            loading: false,
+                            loaded: false,
+                            error: new Error('加载超时')
+                        };
+                    }
+                    
+                    // 继续加载下一批块
+                    loadNextChunks();
+                }, 30000); // 30秒超时
+                
                 // 加载块
                 loadWithCache(
                     url,
                     function(gltf) {
+                        // 清除超时定时器
+                        clearTimeout(timeoutId);
+                        
                         const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
                         console.log(successMsg);
                         addLoadingLog(successMsg);
@@ -1011,7 +988,7 @@
                         // 更新加载进度
                         updateLoadingProgress();
                         
-                        // 加载下一批块
+                        // 加载下一批块 - 即使当前块加载完成也继续加载
                         loadNextChunks();
                         
                     },
@@ -1047,6 +1024,9 @@
                         }
                     },
                     function(error) {
+                        // 清除超时定时器
+                        clearTimeout(timeoutId);
+                        
                         const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
@@ -1078,66 +1058,41 @@
                         loadNextChunks();
                     }
                 );
-            }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
+            }, 50); // 减少延迟，提高加载速度，不再使用 index * 100
         }
         
-        // 优化块模型
-        function optimizeChunkModel(model, chunkIndex) {
-            // 设置块模型的属性
-            model.name = `ModelChunk_${chunkIndex}`;
+        // 加载下一批分块
+        function loadNextChunks() {
+            // 检查是否还有块需要加载
+            if (chunkLoadingQueue.length === 0) {
+                console.log('所有分块模型加载完成');
+                onAllChunksLoaded();
+                return;
+            }
             
-            // 简化光照计算
-            model.traverse(function(child) {
-                if (child.isMesh) {
-                    child.castShadow = false;
-                    child.receiveShadow = false;
-                    
-                    // 减少材质复杂度
-                    if (child.material) {
-                        child.material.envMapIntensity = 0.5;
+            // 计算当前正在加载的块数量
+            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
+            
+            // 如果当前加载的块数量少于最大并发数，则加载更多块
+            const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
+            
+            console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
+            
+            for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
+                const nextChunk = chunkLoadingQueue.shift();
+                loadChunk(nextChunk);
+            }
+            
+            // 特殊处理：如果队列不为空但没有启动新的加载（可能是因为并发限制），
+            // 则定期检查是否可以加载更多块
+            if (chunkLoadingQueue.length > 0 && chunksToLoad <= 0) {
+                setTimeout(() => {
+                    // 再次检查是否有活跃的加载减少，以便加载更多块
+                    const currentActiveLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
+                    if (currentActiveLoads < maxConcurrentChunkLoads) {
+                        loadNextChunks();
                     }
-                }
-            });
-            
-            // 让模型横向显示 - 旋转-90度（修正方向）
-            model.rotation.x = -Math.PI / 2; // 绕X轴旋转-90度
-        }
-        
-        // 更新加载进度显示
-        function updateLoadingProgress() {
-            const loadingText = document.querySelector('.loading-text');
-            const progressBar = document.querySelector('.progress-bar');
-            
-            if (loadingText && totalChunksCount > 0) {
-                // 计算块加载百分比
-                const chunkPercent = Math.round((loadedChunksCount / totalChunksCount) * 100);
-                
-                // 计算文件大小加载百分比（如果有数据）
-                let sizePercent = 0;
-                if (totalBytesToLoad > 0) {
-                    sizePercent = Math.round((totalBytesLoaded / totalBytesToLoad) * 100);
-                }
-                
-                // 显示综合进度信息
-                const speed = calculateLoadSpeed(totalBytesLoaded);
-                const remainingTime = calculateRemainingTime();
-                
-                loadingText.textContent = `正在加载: ${loadedChunksCount}/${totalChunksCount} 块 (${chunkPercent}%)`;
-                
-                if (progressBar) {
-                    // 使用文件大小百分比更准确地反映加载进度
-                    const displayPercent = totalBytesToLoad > 0 ? sizePercent : chunkPercent;
-                    progressBar.style.width = `${displayPercent}%`;
-                    
-                    // 根据进度改变进度条颜色
-                    if (displayPercent >= 90) {
-                        progressBar.style.backgroundColor = '#4CAF50';
-                    } else if (displayPercent >= 50) {
-                        progressBar.style.backgroundColor = '#FFC107';
-                    } else {
-                        progressBar.style.backgroundColor = '#2196F3';
-                    }
-                }
+                }, 500); // 500ms后再次检查
             }
         }
         
@@ -1169,9 +1124,10 @@
                 return;
             }
             
-            const completeMsg = '分块模型加载完成';
-            console.log(completeMsg);
-            addLoadingLog(completeMsg);
+            // 强制完成检查：即使有一些块加载失败，也允许继续
+            // 计算已加载时间
+            const currentTime = Date.now();
+            const elapsedTime = Math.round((currentTime - startTime) / 1000);
             
             // 获取成功加载的块数量
             const successfullyLoadedCount = Object.values(modelChunks).filter(chunk => chunk.loaded).length;
@@ -1193,8 +1149,8 @@
                 progressBar.style.backgroundColor = '#4CAF50';
             }
             
-            // 如果加载成功率低于50%，显示错误并创建替代几何体
-            if (successfullyLoadedCount / totalChunksCount < 0.5) {
+            // 降低加载成功率的阈值，允许更多的块加载失败但仍能继续
+            if (successfullyLoadedCount / totalChunksCount < 0.3) {
                 console.log(`加载成功率过低: ${(successfullyLoadedCount / totalChunksCount * 100).toFixed(1)}%`);
                 const errorMsg = '模型分块加载失败率过高';
                 console.error(errorMsg);
