@@ -899,42 +899,58 @@
                         // 使用与initChunkLoader完全相同的加载器配置
                         const loader = initChunkLoader();
                         
-                        // 直接使用loader.load方法，而不是手动fetch和parse
-                        // 这样可以确保与initChunkLoader使用完全相同的加载逻辑
-                        loader.load(
-                            url,
-                            function(gltf) {
-                                // 存入缓存
-                                if (CACHE_ENABLED) {
-                                    resourceCache.set(url, {
-                                        data: gltf,
-                                        timestamp: Date.now()
-                                    });
+                        // 使用fetch API获取文件，然后手动解析，以便更好地控制错误处理
+                        fetch(url)
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error(`HTTP错误! 状态: ${response.status}`);
                                 }
-                                onLoad(gltf);
-                            },
-                            function(xhr) {
-                                // 进度回调
-                                if (onProgress && xhr.lengthComputable) {
-                                    const percent = (xhr.loaded / xhr.total) * 100;
-                                    onProgress(percent);
+                                return response.arrayBuffer();
+                            })
+                            .then(buffer => {
+                                // 验证文件是否包含glTF头
+                                const uint8Array = new Uint8Array(buffer.slice(0, 4));
+                                const headerStr = String.fromCharCode.apply(null, uint8Array);
+                                
+                                if (headerStr !== 'glTF') {
+                                    throw new Error(`文件不是有效的glTF格式，开头字符: ${headerStr}`);
                                 }
-                            },
-                            function(error) {
+                                
+                                // 使用loader解析GLB文件
+                                loader.parse(
+                                    buffer,
+                                    '',
+                                    function(gltf) {
+                                        // 存入缓存
+                                        if (CACHE_ENABLED) {
+                                            resourceCache.set(url, {
+                                                data: gltf,
+                                                timestamp: Date.now()
+                                            });
+                                        }
+                                        onLoad(gltf);
+                                    },
+                                    function(error) {
+                                        throw new Error(`解析错误: ${error.message}`);
+                                    }
+                                );
+                            })
+                            .catch(error => {
                                 // 增强的错误处理
                                 let errorMessage = `加载失败: ${error.message}`;
                                 
                                 // 特殊处理常见错误
                                 if (error.message.includes('Unexpected token')) {
-                                    errorMessage = `加载失败: 文件格式错误。这通常表示文件可能已损坏或格式不正确。`;
+                                    errorMessage = `加载失败: 服务器返回的内容不是有效的JSON或GLB格式。这可能是服务器配置问题。`;
                                 } else if (error.message.includes('404')) {
                                     errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。`;
+                                } else if (error.message.includes('glTF')) {
+                                    errorMessage = `加载失败: 文件不是有效的GLB格式。`;
                                 }
                                 
                                 console.error(`模型块 ${index} 加载错误:`, error);
                                 onError(new Error(errorMessage));
-                            }
-                        );
+                            });
                     } catch (e) {
                         console.error(`loadWithCache函数内部错误:`, e);
                         onError(new Error(`加载过程中发生内部错误: ${e.message}`));
