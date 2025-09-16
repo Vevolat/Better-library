@@ -1051,8 +1051,28 @@
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
                         
+                        // 检查是否是JSON解析错误（可能是无效的GLB文件）
+                        if (error.message.includes('Unexpected token') || error.message.includes('not valid JSON')) {
+                            const skipMsg = `检测到模型块 ${index} 可能无效，跳过加载`;
+                            console.warn(skipMsg);
+                            addLoadingLog(skipMsg, true);
+                            
+                            // 标记此块为已处理（但未加载）
+                            modelChunks[index] = {
+                                loading: false,
+                                loaded: false,
+                                skipped: true,
+                                error: error
+                            };
+                            
+                            // 增加已加载块计数（即使跳过也算处理完成）
+                            loadedChunksCount++;
+                            
+                            // 更新加载进度
+                            updateLoadingProgress();
+                        }
                         // 如果重试次数未达到上限，则添加到失败列表以便重试
-                        if (retries < maxRetries) {
+                        else if (retries < maxRetries) {
                             const retryMsg = `将在延迟后重试加载模型块 ${index}`;
                             console.log(retryMsg);
                             addLoadingLog(retryMsg);
@@ -1173,9 +1193,10 @@
             console.log(completeMsg);
             addLoadingLog(completeMsg);
             
-            // 获取成功加载的块数量
+            // 获取成功加载的块数量和跳过的块数量
             const successfullyLoadedCount = Object.values(modelChunks).filter(chunk => chunk.loaded).length;
-            const loadSummary = `成功加载 ${successfullyLoadedCount}/${totalChunksCount} 个模型块`;
+            const skippedCount = Object.values(modelChunks).filter(chunk => chunk.skipped).length;
+            const loadSummary = `成功加载 ${successfullyLoadedCount}/${totalChunksCount} 个模型块，跳过 ${skippedCount} 个无效块`;
             console.log(loadSummary);
             addLoadingLog(loadSummary);
             
@@ -1193,15 +1214,18 @@
                 progressBar.style.backgroundColor = '#4CAF50';
             }
             
+            // 计算实际加载成功率（不包括跳过的块）
+            const actualLoadRate = successfullyLoadedCount / (totalChunksCount - skippedCount);
+            
             // 如果加载成功率低于50%，显示错误并创建替代几何体
-            if (successfullyLoadedCount / totalChunksCount < 0.5) {
-                console.log(`加载成功率过低: ${(successfullyLoadedCount / totalChunksCount * 100).toFixed(1)}%`);
+            if (actualLoadRate < 0.5) {
+                console.log(`加载成功率过低: ${(actualLoadRate * 100).toFixed(1)}%`);
                 const errorMsg = '模型分块加载失败率过高';
                 console.error(errorMsg);
                 addLoadingLog(errorMsg, true);
                 
                 if (loadingText) {
-                    loadingText.textContent = `模型加载失败率过高，仅成功加载 ${successfullyLoadedCount}/${totalChunksCount} 个块`;
+                    loadingText.textContent = `模型加载失败率过高，仅成功加载 ${successfullyLoadedCount}/${totalChunksCount - skippedCount} 个块`;
                     loadingText.style.color = '#ff0000';
                 }
                 
