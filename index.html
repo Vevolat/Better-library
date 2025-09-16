@@ -1056,6 +1056,7 @@
         }
         
         // 加载单个分块
+        function loadChunk(chunkInfo) {
             const { url, index, retries = 0 } = chunkInfo;
             const loadingText = document.querySelector('.loading-text');
             const loadingDetails = document.querySelector('.loading-details');
@@ -1249,6 +1250,7 @@
                     }
                 );
             }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
+        }
             
         
         // 优化块模型
