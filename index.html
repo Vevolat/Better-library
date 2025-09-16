@@ -1112,9 +1112,12 @@
                     );
                 }
                 
-                // 加载块
+                // 加载块（使用缓存破坏URL）
+                const cacheBustUrl = window.NETLIFY_DEPLOYED ? 
+                    `${url}?t=${Date.now()}&cachebust=true&netlifyfix=1` : url;
+                
                 loadWithCache(
-                    url,
+                    cacheBustUrl,
                     function(gltf) {
                         const successMsg = `成功加载模型块 ${index}/${totalChunksCount}: ${url}`;
                         console.log(successMsg);
@@ -1185,8 +1188,8 @@
                         addLoadingLog(errorMsg, true);
                         
                         // 检查是否是JSON解析错误（可能是无效的GLB文件或缓存问题）
-                        if (error.message && error.message.includes('Unexpected token') && error.message.includes('JSON')) {
-                            const jsonErrorMsg = `GLB文件格式错误（可能是Netlify缓存问题）: ${error.message}`;
+                        if (error.message && (error.message.includes('Unexpected token') || error.message.includes('JSON') || error.message.includes('version ht'))) {
+                            const jsonErrorMsg = `GLB文件格式错误（Netlify缓存/处理问题）: ${error.message}`;
                             console.warn(jsonErrorMsg);
                             addLoadingLog(jsonErrorMsg, true);
                             
@@ -1196,21 +1199,30 @@
                                 console.log(`已清除缓存: ${url}`);
                             }
                             
-                            // 添加缓存破坏参数
-                            const cacheBustUrl = `${url}?t=${Date.now()}&retry=${retries}`;
+                            // 添加更强大的缓存破坏参数
+                            const cacheBustUrl = `${url}?t=${Date.now()}&retry=${retries}&cachebust=true&netlifyfix=1`;
+                            
+                            // 对于Netlify环境，增加额外的重试延迟
+                            const retryDelay = window.NETLIFY_DEPLOYED ? 2000 + (retries * 1000) : 1000;
                             
                             if (retries < maxRetries) {
-                                const retryMsg = `将在延迟后重试加载模型块 ${index} (缓存问题)`;
+                                const retryMsg = `将在 ${retryDelay}ms 后重试加载模型块 ${index} (Netlify缓存问题)`;
                                 console.log(retryMsg);
                                 addLoadingLog(retryMsg);
                                 // 添加到失败列表，稍后重试（使用缓存破坏URL）
-                                failedChunks.push({
-                                    url: cacheBustUrl,
-                                    index: index,
-                                    retries: retries + 1
-                                });
+                                setTimeout(() => {
+                                    failedChunks.push({
+                                        url: cacheBustUrl,
+                                        index: index,
+                                        retries: retries + 1
+                                    });
+                                    // 如果队列为空，触发重试检查
+                                    if (chunkLoadingQueue.length === 0) {
+                                        loadNextChunks();
+                                    }
+                                }, retryDelay);
                             } else {
-                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，GLB文件格式可能损坏`;
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，Netlify上的GLB文件可能被错误处理`;
                                 console.error(maxRetryMsg);
                                 addLoadingLog(maxRetryMsg, true);
                                 // 标记此块为加载失败
