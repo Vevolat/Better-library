@@ -895,60 +895,50 @@
                         }
                     }
                     
-                    // 直接使用fetch API来加载并验证响应
-                    fetch(url)
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`HTTP错误! 状态码: ${response.status}`);
-                            }
-                            
-                            // 检查是否是HTML错误页面
-                            const contentType = response.headers.get('content-type');
-                            if (contentType && contentType.includes('text/html')) {
-                                return response.text().then(html => {
-                                    throw new Error(`服务器返回HTML而非模型文件。这可能是文件路径错误或服务器配置问题。`);
-                                });
-                            }
-                            
-                            // 对于所有非HTML响应，统一使用arrayBuffer处理，确保二进制文件正确加载
-                            return response.arrayBuffer();
-                        })
-                        .then(arrayBuffer => {
-                            // 使用GLTFLoader来解析二进制数据
-                            const loader = new GLTFLoader(loadingManager);
-                            
-                            // 配置DracoLoader用于压缩模型，与initChunkLoader保持一致
-                            const dracoLoader = new DRACOLoader();
-                            dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
-                            loader.setDRACOLoader(dracoLoader);
-                            
-                            // 配置meshopt解码器
-                            loader.setMeshoptDecoder(MeshoptDecoder);
-                            
-                            loader.parse(arrayBuffer, '', 
-                                function(gltf) {
-                                    // 存入缓存
-                                    if (CACHE_ENABLED) {
-                                        resourceCache.set(url, {
-                                            data: gltf,
-                                            timestamp: Date.now()
-                                        });
-                                    }
-                                    onLoad(gltf);
-                                },
-                                function(parseError) {
-                                    onError(new Error(`解析GLB文件失败: ${parseError.message}`));
+                    try {
+                        // 使用与initChunkLoader完全相同的加载器配置
+                        const loader = initChunkLoader();
+                        
+                        // 直接使用loader.load方法，而不是手动fetch和parse
+                        // 这样可以确保与initChunkLoader使用完全相同的加载逻辑
+                        loader.load(
+                            url,
+                            function(gltf) {
+                                // 存入缓存
+                                if (CACHE_ENABLED) {
+                                    resourceCache.set(url, {
+                                        data: gltf,
+                                        timestamp: Date.now()
+                                    });
                                 }
-                            );
-                        })
-                        .catch(fetchError => {
-                            // 特殊处理JSON解析错误
-                            if (fetchError.message.includes('Unexpected token')) {
-                                onError(new Error(`加载失败: 服务器返回了非JSON数据。这通常表示请求的URL可能返回了HTML错误页面。请检查文件路径是否正确。`));
-                            } else {
-                                onError(new Error(`加载失败: ${fetchError.message}`));
+                                onLoad(gltf);
+                            },
+                            function(xhr) {
+                                // 进度回调
+                                if (onProgress && xhr.lengthComputable) {
+                                    const percent = (xhr.loaded / xhr.total) * 100;
+                                    onProgress(percent);
+                                }
+                            },
+                            function(error) {
+                                // 增强的错误处理
+                                let errorMessage = `加载失败: ${error.message}`;
+                                
+                                // 特殊处理常见错误
+                                if (error.message.includes('Unexpected token')) {
+                                    errorMessage = `加载失败: 文件格式错误。这通常表示文件可能已损坏或格式不正确。`;
+                                } else if (error.message.includes('404')) {
+                                    errorMessage = `加载失败: 文件未找到。请检查文件路径是否正确。`;
+                                }
+                                
+                                console.error(`模型块 ${index} 加载错误:`, error);
+                                onError(new Error(errorMessage));
                             }
-                        });
+                        );
+                    } catch (e) {
+                        console.error(`loadWithCache函数内部错误:`, e);
+                        onError(new Error(`加载过程中发生内部错误: ${e.message}`));
+                    }
                 }
                 
                 // 加载超时处理函数
