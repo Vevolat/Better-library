@@ -1729,6 +1729,18 @@
                 
                 // 启动渐进式加载更新
                 startProgressiveLoadingUpdate(fullModel);
+            } else {
+                // 如果没有找到完整模型，尝试检查是否有已加载的模型块
+                addLoadingLog('未找到FullModel，检查已加载的模型块: ' + loadedModels.length + '个', false);
+                if (loadedModels.length > 0) {
+                    // 尝试将第一个加载的模型作为主模型
+                    adjustCamera(loadedModels[0]);
+                    startProgressiveLoadingUpdate(loadedModels[0]);
+                    addLoadingLog('已使用第一个加载的模型块进行显示', false);
+                } else {
+                    addLoadingLog('未加载任何模型数据，创建替代几何体', true);
+                    createFallbackGeometry();
+                }
             }
             
             // 计算总加载时间
@@ -1789,6 +1801,12 @@
                 // 根据用户需求，加载完成后不显示统计信息
                 loadingSummaryElement.style.display = 'none';
             }
+            
+            // 显示加载统计信息在控制台，便于调试
+            addLoadingLog('已加载模型数量: ' + loadedModels.length, false);
+            loadedModels.forEach((model, index) => {
+                addLoadingLog(`模型 ${index}: ${model.name}, 包含 ${model.children ? model.children.length : 0} 个子对象`, false);
+            });
             
             // 确保完全加载后再隐藏加载动画
             setTimeout(() => {
