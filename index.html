@@ -256,12 +256,14 @@
         if (window.location.hostname.includes('netlify.app')) {
             // 为Netlify环境设置优化的加载参数
             window.NETLIFY_DEPLOYED = true;
-            window.maxRetries = 8; // 增加重试次数以应对网络不稳定
-            window.maxConcurrentChunkLoads = 2; // 减少并发加载数，降低网络拥塞
+            window.maxRetries = 12; // 大幅增加重试次数以应对Netlify的缓存和网络问题
+            window.maxConcurrentChunkLoads = 1; // 减少并发加载数，避免Netlify的并发限制
+            window.netlifyCacheBuster = true; // 启用缓存破坏
         } else {
             window.NETLIFY_DEPLOYED = false;
-            window.maxRetries = 5; // 增加重试次数
-            window.maxConcurrentChunkLoads = 1; // 减少并发加载数
+            window.maxRetries = 5; // 正常重试次数
+            window.maxConcurrentChunkLoads = 2; // 正常并发加载数
+            window.netlifyCacheBuster = false;
         }
     </script>
     
@@ -825,8 +827,23 @@
             
             totalChunksCount = 0;
             const chunkFiles = [];
-            const maxAttempts = 200; // 设置最大尝试次数，避免无限循环
+            const maxAttempts = 50; // 减少最大尝试次数，避免过多404请求
             let attempts = 0;
+            
+            // Netlify环境特殊处理：直接使用已知的文件数量
+            if (window.NETLIFY_DEPLOYED) {
+                console.log('Netlify环境：使用预定义的文件数量29');
+                // 根据你的目录结构，有29个文件（0000000到0000028）
+                for (let i = 0; i < 29; i++) {
+                    const chunkIndex = String(i).padStart(7, '0');
+                    const chunkUrl = `mx2/___${chunkIndex}.glb`;
+                    chunkFiles.push(chunkUrl);
+                }
+                totalChunksCount = 29;
+                console.log(`Netlify环境：预加载${totalChunksCount}个模型文件`);
+                onChunksDiscovered(chunkFiles);
+                return;
+            }
             
             // 创建一个检测文件是否存在的函数
             function checkChunkExists(index) {
@@ -875,7 +892,7 @@
                 xhr.send();
             }
             
-            // 开始从索引0检测
+            // 开始从索引0检测，设置最大检测数量为实际文件数+5
             checkChunkExists(0);
         }
         
@@ -938,6 +955,9 @@
             
             // 开始加载第一批块
             loadNextChunks();
+            
+            // 启动失败块重试检查
+            startFailedChunkRetryCheck();
         }
         
         // 计算块的加载优先级（简单实现）
@@ -1018,8 +1038,24 @@
             }
         }
         
+        // 失败块重试检查
+        function startFailedChunkRetryCheck() {
+            setInterval(() => {
+                if (failedChunks.length > 0 && chunkLoadingQueue.length === 0) {
+                    console.log(`发现 ${failedChunks.length} 个失败块，开始重试...`);
+                    // 将失败块重新加入加载队列
+                    failedChunks.forEach(chunk => {
+                        chunkLoadingQueue.push(chunk);
+                    });
+                    failedChunks = [];
+                    // 重新排序并开始加载
+                    chunkLoadingQueue.sort((a, b) => a.priority - b.priority);
+                    loadNextChunks();
+                }
+            }, 5000); // 每5秒检查一次
+        }
+        
         // 加载单个分块
-        function loadChunk(chunkInfo) {
             const { url, index, retries = 0 } = chunkInfo;
             const loadingText = document.querySelector('.loading-text');
             const loadingDetails = document.querySelector('.loading-details');
@@ -1147,28 +1183,65 @@
                         console.error(errorMsg);
                         addLoadingLog(errorMsg, true);
                         
-                        // 检查是否是JSON解析错误（可能是无效的GLB文件）
-                        // 不再跳过任何模型块，统一进入重试流程
-                        if (retries < maxRetries) {
-                            const retryMsg = `将在延迟后重试加载模型块 ${index} (${error.message})`;
-                            console.log(retryMsg);
-                            addLoadingLog(retryMsg);
-                            // 添加到失败列表，稍后重试
-                            failedChunks.push({
-                                url: url,
-                                index: index,
-                                retries: retries + 1
-                            });
+                        // 检查是否是JSON解析错误（可能是无效的GLB文件或缓存问题）
+                        if (error.message && error.message.includes('Unexpected token') && error.message.includes('JSON')) {
+                            const jsonErrorMsg = `GLB文件格式错误（可能是Netlify缓存问题）: ${error.message}`;
+                            console.warn(jsonErrorMsg);
+                            addLoadingLog(jsonErrorMsg, true);
+                            
+                            // 对于JSON解析错误，尝试清除缓存并重试
+                            if (CACHE_ENABLED && resourceCache.has(url)) {
+                                resourceCache.delete(url);
+                                console.log(`已清除缓存: ${url}`);
+                            }
+                            
+                            // 添加缓存破坏参数
+                            const cacheBustUrl = `${url}?t=${Date.now()}&retry=${retries}`;
+                            
+                            if (retries < maxRetries) {
+                                const retryMsg = `将在延迟后重试加载模型块 ${index} (缓存问题)`;
+                                console.log(retryMsg);
+                                addLoadingLog(retryMsg);
+                                // 添加到失败列表，稍后重试（使用缓存破坏URL）
+                                failedChunks.push({
+                                    url: cacheBustUrl,
+                                    index: index,
+                                    retries: retries + 1
+                                });
+                            } else {
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，GLB文件格式可能损坏`;
+                                console.error(maxRetryMsg);
+                                addLoadingLog(maxRetryMsg, true);
+                                // 标记此块为加载失败
+                                modelChunks[index] = {
+                                    loading: false,
+                                    loaded: false,
+                                    error: error
+                                };
+                            }
                         } else {
-                            const maxRetryMsg = `模型块 ${index} 达到最大重试次数，加载失败`;
-                            console.error(maxRetryMsg);
-                            addLoadingLog(maxRetryMsg, true);
-                            // 标记此块为加载失败
-                            modelChunks[index] = {
-                                loading: false,
-                                loaded: false,
-                                error: error
-                            };
+                            // 其他类型的错误
+                            if (retries < maxRetries) {
+                                const retryMsg = `将在延迟后重试加载模型块 ${index} (${error.message})`;
+                                console.log(retryMsg);
+                                addLoadingLog(retryMsg);
+                                // 添加到失败列表，稍后重试
+                                failedChunks.push({
+                                    url: url,
+                                    index: index,
+                                    retries: retries + 1
+                                });
+                            } else {
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，加载失败`;
+                                console.error(maxRetryMsg);
+                                addLoadingLog(maxRetryMsg, true);
+                                // 标记此块为加载失败
+                                modelChunks[index] = {
+                                    loading: false,
+                                    loaded: false,
+                                    error: error
+                                };
+                            }
                         }
                         
                         // 继续加载下一批块
@@ -1176,7 +1249,7 @@
                     }
                 );
             }, index * 100); // 为不同的块添加不同的延迟，减少并发请求
-        }
+            
         
         // 优化块模型
         function optimizeChunkModel(model, chunkIndex) {
