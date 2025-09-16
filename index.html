@@ -817,19 +817,67 @@
         // 安全地检测URL是否有效且返回正确的内容类型
         async function isValidGlbUrl(url) {
             try {
-                const response = await fetch(url, {
+                // 使用HEAD请求先检查基本信息
+                const headResponse = await fetch(url, { 
                     method: 'HEAD',
                     cache: 'no-cache'
                 });
                 
-                if (!response.ok) {
+                if (!headResponse.ok) {
                     return false;
                 }
                 
                 // 检查Content-Type是否为模型相关类型
-                const contentType = response.headers.get('Content-Type') || '';
-                return contentType.includes('model/gltf-binary') || 
-                       contentType.includes('application/octet-stream');
+                const contentType = headResponse.headers.get('Content-Type') || '';
+                
+                // 检查文件大小是否合理（GLB文件通常至少有几个KB）
+                const contentLength = headResponse.headers.get('Content-Length');
+                if (contentLength && parseInt(contentLength) < 100) {
+                    return false;
+                }
+                
+                // Netlify特定处理：检查是否可能返回HTML
+                // 1. 如果Content-Type表明是HTML
+                if (contentType.includes('text/html')) {
+                    return false;
+                }
+                
+                // 2. 对于可能的HTML响应（即使Content-Type不正确），进行额外验证
+                if (!contentType.includes('model/gltf-binary') && 
+                    !contentType.includes('application/octet-stream')) {
+                    try {
+                        // 获取文件开头的几个字节进行检查
+                        const blobResponse = await fetch(url, {
+                            method: 'GET',
+                            cache: 'no-cache',
+                            headers: { 'Range': 'bytes=0-31' } // 只获取前32个字节
+                        });
+                        
+                        if (!blobResponse.ok) {
+                            return false;
+                        }
+                        
+                        // 读取前几个字节，检查是否为二进制文件而非HTML
+                        const arrayBuffer = await blobResponse.arrayBuffer();
+                        const firstBytes = new Uint8Array(arrayBuffer);
+                        
+                        // 检查是否有明显的HTML标签特征
+                        const textDecoder = new TextDecoder();
+                        const firstChars = textDecoder.decode(firstBytes);
+                        
+                        // 如果包含HTML标签或DOCTYPE声明，很可能是HTML文件
+                        if (firstChars.includes('<html') || 
+                            firstChars.includes('<!DOCTYPE') || 
+                            firstChars.includes('<body')) {
+                            console.warn('URL可能返回了HTML而不是GLB文件:', url);
+                            return false;
+                        }
+                    } catch (innerError) {
+                        console.warn('额外内容验证失败，假设URL有效:', innerError);
+                    }
+                }
+                
+                return true;
             } catch (error) {
                 return false;
             }
@@ -1031,6 +1079,21 @@
                                     console.error(`URL可能返回了HTML而不是GLB文件: ${url}`);
                                     const enhancedError = new Error(`无效的GLB文件格式: ${error.message}`);
                                     enhancedError.isInvalidFormat = true;
+                                    enhancedError.originalError = error;
+                                    onError(enhancedError);
+                                } else if (error.message && error.message.includes('JSON.parse')) {
+                                    // 额外处理JSON解析错误
+                                    console.error(`GLB文件解析为JSON失败，可能是HTML响应: ${url}`);
+                                    const enhancedError = new Error(`GLB文件JSON解析错误: ${error.message}`);
+                                    enhancedError.isInvalidFormat = true;
+                                    enhancedError.originalError = error;
+                                    onError(enhancedError);
+                                } else if (error.message && error.message.includes('Cannot read properties')) {
+                                    // 处理属性读取错误（可能是因为响应内容不是预期的格式）
+                                    console.error(`GLB文件格式异常，可能是HTML响应: ${url}`);
+                                    const enhancedError = new Error(`GLB文件格式异常: ${error.message}`);
+                                    enhancedError.isInvalidFormat = true;
+                                    enhancedError.originalError = error;
                                     onError(enhancedError);
                                 } else {
                                     onError(error);
@@ -1119,29 +1182,40 @@
                         if (error.isInvalidUrl || error.isInvalidFormat) {
                             console.error(`模型块 ${index} 可能路径错误或文件格式无效，将尝试备选方案`);
                             
-                            // 尝试使用merged.glb作为备选
-                            if (!modelFiles.includes('merged.glb')) {
-                                console.log('添加merged.glb作为备选加载方案');
-                                modelFiles.push('merged.glb');
-                                
-                                // 清空当前加载队列，切换到备选方案
-                                chunkLoadingQueue = [];
-                                failedChunks = [];
-                                
-                                // 通知用户正在切换加载方案
-                                const loadingText = document.querySelector('.loading-text');
-                                if (loadingText) {
-                                    loadingText.textContent = '分块模型加载失败，正在尝试备选加载方案...';
-                                }
-                                
-                                // 延迟后启动备选方案
-                                setTimeout(() => {
-                                    // 尝试加载单一模型文件
-                                    loadModelFiles();
-                                }, 1000);
-                                
-                                return;
+                            // 检查是否已经有备选模型文件列表
+                            if (modelFiles.length > 0) {
+                                console.log('使用已配置的备选模型文件列表');
+                            } else {
+                                console.log('未找到备选模型文件，添加默认备选方案');
+                                // 添加默认备选模型文件列表
+                                const defaultFallbackFiles = [
+                                    'merged.glb',
+                                    'model.glb',
+                                    'scene.glb',
+                                    '3dmodel.glb',
+                                    'model.gltf',
+                                    'scene.gltf'
+                                ];
+                                modelFiles.push(...defaultFallbackFiles);
                             }
+                            
+                            // 清空当前加载队列，切换到备选方案
+                            chunkLoadingQueue = [];
+                            failedChunks = [];
+                            
+                            // 通知用户正在切换加载方案
+                            const loadingText = document.querySelector('.loading-text');
+                            if (loadingText) {
+                                loadingText.textContent = '分块模型加载失败，正在尝试备选加载方案...';
+                            }
+                            
+                            // 延迟后启动备选方案
+                            setTimeout(() => {
+                                // 尝试加载单一模型文件
+                                loadModelFiles();
+                            }, 1000);
+                            
+                            return;
                         }
                         
                         // 如果重试次数未达到上限，则添加到失败列表以便重试
