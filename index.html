@@ -255,7 +255,6 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-        import { FileLoader } from 'three/addons/loaders/FileLoader.js';
         import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
         
         // 初始化变量
@@ -925,7 +924,16 @@
                         })
                         .then(arrayBuffer => {
                             // 使用GLTFLoader来解析二进制数据
-                            const loader = new GLTFLoader();
+                            const loader = new GLTFLoader(loadingManager);
+                            
+                            // 配置DracoLoader用于压缩模型，与initChunkLoader保持一致
+                            const dracoLoader = new DRACOLoader();
+                            dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+                            loader.setDRACOLoader(dracoLoader);
+                            
+                            // 配置meshopt解码器
+                            loader.setMeshoptDecoder(MeshoptDecoder);
+                            
                             loader.parse(arrayBuffer, '', 
                                 function(gltf) {
                                     // 存入缓存
