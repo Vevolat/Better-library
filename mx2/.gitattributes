@@ -1,4 +1,2 @@
-# 配置Git LFS来管理大型3D模型文件
 *.glb filter=lfs diff=lfs merge=lfs -text
 *.glb.rcInfo filter=lfs diff=lfs merge=lfs -text
-mx2/*. filter=lfs diff=lfs merge=lfs -text
