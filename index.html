@@ -799,8 +799,8 @@
         function loadPreChunkedModel() {
             console.log('准备加载预分块的模型');
             // mx2目录中的模型块数量
-            // 根据实际文件数量设置为19个块（索引10到28）
-            totalChunksCount = 19;
+            // 总共有29个块（索引0到28）
+            totalChunksCount = 29;
         
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
@@ -825,7 +825,7 @@
             chunkLoader = initChunkLoader();
             
             // 构建块加载队列 - 按照块索引顺序加载
-            for (let i = 10; i <= 28; i++) {
+            for (let i = 0; i <= 28; i++) {
                 const chunkIndex = String(i).padStart(7, '0');
                 const chunkUrl = `mx2/___${chunkIndex}.glb`;
             
@@ -847,79 +847,12 @@
         // 计算块的加载优先级（简单实现）
         function calculateChunkPriority(chunkIndex) {
             // 中心区域的块优先加载
-            // 实际文件从10到28，中心索引约为19
-            const centerIndex = 19;
+            // 实际文件从0到28，中心索引约为14
+            const centerIndex = 14;
             const distanceFromCenter = Math.abs(chunkIndex - centerIndex);
             
             // 距离中心越近，优先级越高（数值越小）
             return distanceFromCenter;
-        }
-        
-        // 加载下一批分块
-        function loadNextChunks() {
-            // 检查是否还有块需要加载
-            if (chunkLoadingQueue.length === 0) {
-                console.log('所有分块模型加载完成');
-                onAllChunksLoaded();
-                return;
-            }
-            
-            // 计算当前正在加载的块数量
-            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
-            
-            // 如果当前加载的块数量少于最大并发数，则加载更多块
-            const chunksToLoad = maxConcurrentChunkLoads - activeLoads;
-            
-            console.log(`当前正在加载: ${activeLoads} 个块, 队列中剩余: ${chunkLoadingQueue.length} 个块`);
-            
-            for (let i = 0; i < chunksToLoad && chunkLoadingQueue.length > 0; i++) {
-                const nextChunk = chunkLoadingQueue.shift();
-                loadChunk(nextChunk);
-            }
-        }
-        
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-            else return (bytes / 1048576).toFixed(1) + ' MB';
-        }
-        
-        // 计算加载速度
-        function calculateLoadSpeed(bytesLoaded) {
-            const currentTime = Date.now();
-            const timeDiff = (currentTime - lastLoadedTime) / 1000; // 转换为秒
-            const bytesDiff = bytesLoaded - lastLoadedBytes;
-            
-            if (timeDiff > 0) {
-                const speed = bytesDiff / timeDiff; // B/s
-                averageLoadSpeed = averageLoadSpeed * 0.7 + speed * 0.3; // 平滑处理
-                
-                lastLoadedTime = currentTime;
-                lastLoadedBytes = bytesLoaded;
-            }
-            
-            return averageLoadSpeed;
-        }
-        
-        // 计算预计剩余时间
-        function calculateRemainingTime() {
-            if (totalBytesLoaded === 0 || totalBytesToLoad === 0) return '未知';
-            
-            const remainingBytes = totalBytesToLoad - totalBytesLoaded;
-            const speed = calculateLoadSpeed(totalBytesLoaded);
-            
-            if (speed === 0) return '未知';
-            
-            const remainingSeconds = Math.round(remainingBytes / speed);
-            
-            if (remainingSeconds < 60) {
-                return `${remainingSeconds}秒`;
-            } else {
-                const minutes = Math.floor(remainingSeconds / 60);
-                const seconds = remainingSeconds % 60;
-                return `${minutes}分${seconds}秒`;
-            }
         }
         
         // 加载单个分块
@@ -1047,31 +980,47 @@
                         }
                     },
                     function(error) {
-                        const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
-                        console.error(errorMsg);
-                        addLoadingLog(errorMsg, true);
+                        // 特殊处理404错误
+                        const is404 = error.message && (error.message.includes('404') || error.message.includes('Not Found'));
                         
-                        // 如果重试次数未达到上限，则添加到失败列表以便重试
-                        if (retries < maxRetries) {
-                            const retryMsg = `将在延迟后重试加载模型块 ${index}`;
-                            console.log(retryMsg);
-                            addLoadingLog(retryMsg);
-                            // 添加到失败列表，稍后重试
-                            failedChunks.push({
-                                url: url,
-                                index: index,
-                                retries: retries + 1
-                            });
-                        } else {
-                            const maxRetryMsg = `模型块 ${index} 达到最大重试次数，不再重试`;
-                            console.error(maxRetryMsg);
-                            addLoadingLog(maxRetryMsg, true);
-                            // 标记此块为加载失败
+                        if (is404) {
+                            const notFoundMsg = `模型块 ${index} 文件不存在: ${url} (跳过此块)`;
+                            console.log(notFoundMsg);
+                            addLoadingLog(notFoundMsg);
+                            // 标记此块为不存在，不再重试
                             modelChunks[index] = {
                                 loading: false,
                                 loaded: false,
+                                missing: true,
                                 error: error
                             };
+                        } else {
+                            const errorMsg = `加载模型块 ${index} 失败: ${error.message}`;
+                            console.error(errorMsg);
+                            addLoadingLog(errorMsg, true);
+                            
+                            // 如果重试次数未达到上限，则添加到失败列表以便重试
+                            if (retries < maxRetries) {
+                                const retryMsg = `将在延迟后重试加载模型块 ${index}`;
+                                console.log(retryMsg);
+                                addLoadingLog(retryMsg);
+                                // 添加到失败列表，稍后重试
+                                failedChunks.push({
+                                    url: url,
+                                    index: index,
+                                    retries: retries + 1
+                                });
+                            } else {
+                                const maxRetryMsg = `模型块 ${index} 达到最大重试次数，不再重试`;
+                                console.error(maxRetryMsg);
+                                addLoadingLog(maxRetryMsg, true);
+                                // 标记此块为加载失败
+                                modelChunks[index] = {
+                                    loading: false,
+                                    loaded: false,
+                                    error: error
+                                };
+                            }
                         }
                         
                         // 继续加载下一批块
@@ -1175,7 +1124,10 @@
             
             // 获取成功加载的块数量
             const successfullyLoadedCount = Object.values(modelChunks).filter(chunk => chunk.loaded).length;
-            const loadSummary = `成功加载 ${successfullyLoadedCount}/${totalChunksCount} 个模型块`;
+            const missingChunksCount = Object.values(modelChunks).filter(chunk => chunk.missing).length;
+            const failedChunksCount = Object.values(modelChunks).filter(chunk => chunk.error && !chunk.missing).length;
+            
+            const loadSummary = `成功加载 ${successfullyLoadedCount}/${totalChunksCount} 个模型块 | 缺失: ${missingChunksCount} 个 | 加载失败: ${failedChunksCount} 个`;
             console.log(loadSummary);
             addLoadingLog(loadSummary);
             
@@ -1193,9 +1145,14 @@
                 progressBar.style.backgroundColor = '#4CAF50';
             }
             
-            // 如果加载成功率低于50%，显示错误并创建替代几何体
-            if (successfullyLoadedCount / totalChunksCount < 0.5) {
-                console.log(`加载成功率过低: ${(successfullyLoadedCount / totalChunksCount * 100).toFixed(1)}%`);
+            // 计算实际存在并成功加载的块比例
+            // 排除缺失的块，只考虑理论上应该存在的块
+            const theoreticalChunksCount = totalChunksCount - missingChunksCount;
+            const effectiveSuccessRate = theoreticalChunksCount > 0 ? successfullyLoadedCount / theoreticalChunksCount : 0;
+            
+            // 如果有效加载成功率低于50%，显示错误并创建替代几何体
+            if (effectiveSuccessRate < 0.5 && successfullyLoadedCount < 5) {
+                console.log(`有效加载成功率过低: ${(effectiveSuccessRate * 100).toFixed(1)}%`);
                 const errorMsg = '模型分块加载失败率过高';
                 console.error(errorMsg);
                 addLoadingLog(errorMsg, true);
