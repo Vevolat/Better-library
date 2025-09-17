@@ -772,8 +772,8 @@
         // 检查是否存在分块目录并尝试加载分块模型
         function checkForChunksDirectory() {
             // 我们尝试访问mx2目录中的第一个文件来验证目录存在
-            const testChunkUrl = 'mx2/___0000000.glb';
-            
+            const testChunkUrl = 'mx2/___0000010.glb';
+        
             const xhr = new XMLHttpRequest();
             xhr.open('HEAD', testChunkUrl, true);
             xhr.onreadystatechange = function() {
@@ -799,8 +799,8 @@
         function loadPreChunkedModel() {
             console.log('准备加载预分块的模型');
             // mx2目录中的模型块数量
-            // 根据实际文件数量设置为29个块（索引0到28）
-            totalChunksCount = 29;
+            // 根据实际文件数量设置为19个块（索引10到28）
+            totalChunksCount = 19;
         
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
@@ -825,7 +825,7 @@
             chunkLoader = initChunkLoader();
             
             // 构建块加载队列 - 按照块索引顺序加载
-            for (let i = 0; i < totalChunksCount; i++) {
+            for (let i = 10; i <= 28; i++) {
                 const chunkIndex = String(i).padStart(7, '0');
                 const chunkUrl = `mx2/___${chunkIndex}.glb`;
             
@@ -847,8 +847,8 @@
         // 计算块的加载优先级（简单实现）
         function calculateChunkPriority(chunkIndex) {
             // 中心区域的块优先加载
-            // 假设中间索引（约20）是模型的中心部分
-            const centerIndex = totalChunksCount / 2;
+            // 实际文件从10到28，中心索引约为19
+            const centerIndex = 19;
             const distanceFromCenter = Math.abs(chunkIndex - centerIndex);
             
             // 距离中心越近，优先级越高（数值越小）
