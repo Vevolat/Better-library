@@ -1,2 +1,0 @@
-*.glb filter=lfs diff=lfs merge=lfs -text
-*.glb.rcInfo filter=lfs diff=lfs merge=lfs -text
