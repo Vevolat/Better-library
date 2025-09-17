@@ -890,6 +890,27 @@
             return distanceFromCenter;
         }
         
+        // 加载下一批块
+        function loadNextChunks() {
+            // 检查是否有正在加载的块，确保不超过最大并发加载数
+            const activeLoads = Object.values(modelChunks).filter(chunk => chunk.loading).length;
+            
+            // 只要队列中有块，并且未达到最大并发加载数，就继续加载
+            while (chunkLoadingQueue.length > 0 && activeLoads < maxConcurrentChunkLoads) {
+                const chunkInfo = chunkLoadingQueue.shift(); // 获取队列中的下一个块
+                
+                // 确保只加载10-28号文件，跳过任何可能的0号文件
+                if (chunkInfo.index >= 10 && chunkInfo.index <= 28) {
+                    loadChunk(chunkInfo); // 加载这个块
+                }
+            }
+            
+            // 如果队列为空且没有正在加载的块，检查是否所有块都已加载完成
+            if (chunkLoadingQueue.length === 0 && Object.values(modelChunks).filter(chunk => chunk.loading).length === 0) {
+                onAllChunksLoaded(); // 所有块加载完成
+            }
+        }
+        
         // 加载单个分块
         function loadChunk(chunkInfo) {
             const { url, index, retries = 0 } = chunkInfo;
