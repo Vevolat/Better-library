@@ -772,7 +772,7 @@
         // 检查是否存在分块目录并尝试加载分块模型
         function checkForChunksDirectory() {
             // 我们尝试访问mx2目录中的第一个文件来验证目录存在
-            const testChunkUrl = 'mx2/___0000005_0000000.glb';
+            const testChunkUrl = 'mx2/___0000000.glb';
             
             const xhr = new XMLHttpRequest();
             xhr.open('HEAD', testChunkUrl, true);
@@ -801,13 +801,13 @@
             // mx2目录中的模型块数量
             // 根据实际文件数量设置为29个块（索引0到28）
             totalChunksCount = 29;
-            
+        
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
             fullModel.name = 'FullModel';
             loadedModels.push(fullModel);
             scene.add(fullModel);
-            
+        
             // 启动分块加载过程
             startChunkLoading();
         }
@@ -827,9 +827,9 @@
             // 构建块加载队列 - 按照块索引顺序加载
             for (let i = 0; i < totalChunksCount; i++) {
                 const chunkIndex = String(i).padStart(7, '0');
-                const chunkUrl = `mx2/___0000005_${chunkIndex}.glb`;
+                const chunkUrl = `mx2/___${chunkIndex}.glb`;
             
-                // 添加到加载队列
+                // 添加到加载优先级队列
                 chunkLoadingQueue.push({
                     url: chunkUrl,
                     index: i,
