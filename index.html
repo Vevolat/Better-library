@@ -799,15 +799,15 @@
         function loadPreChunkedModel() {
             console.log('准备加载预分块的模型');
             // mx2目录中的模型块数量
-            // 根据实际文件数量设置为33个块（索引0到32）
-            totalChunksCount = 33;
-            
+            // 根据实际文件数量设置为29个块（索引0到28）
+            totalChunksCount = 29;
+        
             // 创建一个代表整个模型的空容器
             const fullModel = new THREE.Group();
             fullModel.name = 'FullModel';
             loadedModels.push(fullModel);
             scene.add(fullModel);
-            
+        
             // 启动分块加载过程
             startChunkLoading();
         }
