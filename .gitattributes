@@ -1,3 +1,0 @@
-# Configure Git LFS to handle large 3D model files
-*.glb filter=lfs diff=lfs merge=lfs -text
-*.glb.rcInfo filter=lfs diff=lfs merge=lfs -text
