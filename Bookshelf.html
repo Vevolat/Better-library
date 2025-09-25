@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Library - Bookshelf</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="fixed w-full top-0 z-50 bg-white/80 backdrop-blur-md shadow-sm transition-all duration-300" id="navbar">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/index.html" class="text-2xl font-bold text-primary flex items-center">
+                <i class="fa fa-book mr-2"></i>
+                <span>Better Library</span>
+            </a>
+            
+            <!-- 桌面端导航链接 -->
+            <div class="hidden md:flex items-center space-x-8">
+                <a href="/index.html" class="text-accent hover:text-primary transition-colors">Home</a>
+                <a href="/Bookshelf.html" class="text-primary font-medium">Bookshelf</a>
+                
+                <!-- 主题切换按钮 -->
+                <button id="themeToggle" class="p-2 rounded-full hover:bg-secondary transition-colors">
+                    <i class="fa fa-sun text-yellow-500"></i>
+                </button>
+            </div>
+            
+            <!-- 移动端菜单按钮 -->
+            <button id="mobileMenuToggle" class="md:hidden p-2 rounded-full hover:bg-secondary transition-colors">
+                <i class="fa fa-bars text-accent"></i>
+            </button>
+        </div>
+        
+        <!-- 移动端导航菜单 -->
+        <div id="mobileMenu" class="md:hidden hidden bg-white border-t">
+            <div class="container mx-auto px-4 py-2 flex flex-col space-y-3">
+                <a href="/index.html" class="py-2 text-accent hover:text-primary transition-colors">Home</a>
+                <a href="/Bookshelf.html" class="py-2 text-primary font-medium">Bookshelf</a>
+                
+                <!-- 移动端主题切换按钮 -->
+                <button id="mobileThemeToggle" class="py-2 text-left flex items-center">
+                    <i class="fa fa-sun text-yellow-500 mr-2"></i>
+                    <span id="themeText">Light Mode</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <main class="container mx-auto px-4 pt-28 pb-20">
+        <!-- 页面标题 -->
+        <div class="text-center mb-12">
+            <h1 class="text-3xl md:text-4xl font-bold mb-4 opacity-0" id="bookshelfTitle">Our Bookshelf</h1>
+            <p class="text-accent max-w-2xl mx-auto opacity-0" id="bookshelfSubtitle">Discover all available books in our library</p>
+        </div>
+        
+        <!-- 书籍分类 -->
+        <div class="mb-12">
+            <div class="flex flex-wrap justify-center gap-3 mb-8">
+                <button class="category-btn px-5 py-2 rounded-full bg-primary text-white transition-all duration-300" data-category="all">All Books</button>
+                <button class="category-btn px-5 py-2 rounded-full bg-white text-accent hover:bg-secondary transition-all duration-300" data-category="biography">Biography</button>
+                <button class="category-btn px-5 py-2 rounded-full bg-white text-accent hover:bg-secondary transition-all duration-300" data-category="fiction">Fiction</button>
+                <button class="category-btn px-5 py-2 rounded-full bg-white text-accent hover:bg-secondary transition-all duration-300" data-category="non-fiction">Non-Fiction</button>
+                <button class="category-btn px-5 py-2 rounded-full bg-white text-accent hover:bg-secondary transition-all duration-300" data-category="science">Science</button>
+            </div>
+        </div>
+        
+        <!-- 搜索功能 -->
+        <div class="max-w-2xl mx-auto mb-12">
+            <div class="relative">
+                <input type="text" id="searchInput" placeholder="Search for books..." class="w-full px-6 py-3 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all">
+                <i class="fa fa-search absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+        </div>
+        
+        <!-- 书籍网格 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" id="booksGrid">
+            <!-- 加载状态 -->
+            <div id="loadingIndicator" class="col-span-full text-center py-12">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+                <p class="mt-4 text-accent">Loading books...</p>
+            </div>
+            
+            <!-- 书籍将通过JavaScript动态加载 -->
+        </div>
+        
+        <!-- 空状态 (初始隐藏) -->
+        <div id="emptyState" class="hidden col-span-full text-center py-16">
+            <i class="fa fa-book-open text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-xl font-semibold mb-2">No books found</h3>
+            <p class="text-accent">Try changing your search or filters</p>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-white border-t py-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-6 md:mb-0">
+                    <a href="/index.html" class="text-xl font-bold text-primary flex items-center">
+                        <i class="fa fa-book mr-2"></i>
+                        <span>Better Library</span>
+                    </a>
+                    <p class="mt-2 text-accent">Your personal digital library</p>
+                </div>
+                
+                <div class="flex space-x-6">
+                    <a href="#" class="text-accent hover:text-primary transition-colors">
+                        <i class="fa fa-twitter text-xl"></i>
+                    </a>
+                    <a href="#" class="text-accent hover:text-primary transition-colors">
+                        <i class="fa fa-facebook text-xl"></i>
+                    </a>
+                    <a href="#" class="text-accent hover:text-primary transition-colors">
+                        <i class="fa fa-instagram text-xl"></i>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="mt-8 pt-8 border-t text-center text-sm text-accent">
+                <p>&copy; 2023 Better Library. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 回到顶部按钮 -->
+    <button id="backToTop" class="fixed bottom-6 right-6 p-3 rounded-full bg-primary text-white shadow-lg opacity-0 invisible transition-all duration-300 hover:bg-accent">
+        <i class="fa fa-arrow-up"></i>
+    </button>
+
+    <!-- JavaScript -->
+    <script src="/js/script.js"></script>
+</body>
+</html>
