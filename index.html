@@ -1,2 +1,130 @@
-404
-页面似乎被移走了
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better library</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2D3748',
+                        secondary: '#E2E8F0',
+                        accent: '#4A5568',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                },
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-balance {
+                text-wrap: balance;
+            }
+            .animate-float {
+                animation: float 6s ease-in-out infinite;
+            }
+            .animate-slide-in {
+                animation: slideIn 0.8s ease forwards;
+            }
+            .animate-fade-in {
+                animation: fadeIn 1s ease forwards;
+            }
+            .animate-scale-in {
+                animation: scaleIn 0.5s ease forwards;
+            }
+            .animate-pulse-slow {
+                animation: pulseSlow 4s infinite;
+            }
+            .animate-bounce-down {
+                animation: bounceDown 2s ease-in-out infinite;
+            }
+            .intro-hidden {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+        }
+    </style>
+</head>
+<body class="bg-white text-primary min-h-screen flex flex-col">
+    <!-- 初始欢迎页面 -->
+    <div id="introScreen" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
+        <div class="text-center">
+            <h2 class="text-3xl font-bold mb-8">Welcome to the Better library</h2>
+            <!-- 向下箭头指示器 -->
+            <div id="scrollIndicator" class="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-4xl text-primary/70 animate-bounce-down">
+                <i class="fa fa-chevron-down"></i>
+            </div>
+        </div>
+    </div>
+    <!-- 导航栏 -->
+    <header class="fixed w-full top-0 z-50 transition-all duration-300" id="navbar">
+        <nav class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="#" class="text-2xl font-bold tracking-tight">Better library</a>
+            <div class="hidden md:flex items-center gap-4">
+                <!-- 模式切换按钮 -->
+                <button id="themeToggle" class="p-2 rounded-full hover:bg-secondary transition-colors duration-300">
+                    <i class="fa fa-moon-o"></i>
+                </button>
+            </div>
+            <button class="md:hidden text-2xl" id="menuBtn">
+                <i class="fa fa-bars"></i>
+            </button>
+        </nav>
+        <!-- 移动端菜单 -->
+        <div id="mobileMenu" class="hidden bg-white dark:bg-gray-800 absolute w-full py-4">
+            <div class="container mx-auto px-4 flex flex-col items-center gap-4">
+                <!-- 移动端模式切换按钮 -->
+                <button id="mobileThemeToggle" class="p-2 rounded-full hover:bg-secondary transition-colors duration-300">
+                    <i class="fa fa-moon-o"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 英雄区域 -->
+    <section id="home" class="pt-32 pb-20 px-4 flex flex-col items-center justify-center min-h-screen intro-hidden">
+        <div class="container mx-auto max-w-4xl text-center">
+            <h1 class="text-[clamp(2.5rem,6vw,4.5rem)] font-bold mb-6 opacity-0" id="heroTitle">
+                Books are the ladder of human progress.
+            </h1>
+            <p class="text-xl md:text-2xl text-accent mb-10 max-w-2xl mx-auto opacity-0" id="heroDesc">
+                Maxim Gorky
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4 opacity-0" id="heroBtn">
+                <a href="/Bookshelf.html" class="px-8 py-3 bg-primary text-white rounded-md hover:bg-accent transition-all duration-300">
+                    Read
+                </a>
+                <a href="#about" class="px-8 py-3 border border-primary rounded-md hover:bg-secondary transition-all duration-300">
+                    Learn more
+                </a>
+            </div>
+        </div>
+        <!-- 非线性动画元素 -->
+        <div class="hidden md:block absolute w-full h-full overflow-hidden pointer-events-none">
+            <div class="absolute top-[10%] left-[5%] w-24 h-24 rounded-full border-2 border-secondary animate-float opacity-70" style="animation-delay: 0s;"></div>
+            <div class="absolute top-[20%] right-[10%] w-16 h-16 rounded-full border-2 border-secondary animate-float opacity-50" style="animation-delay: 1s;"></div>
+            <div class="absolute bottom-[30%] left-[15%] w-20 h-20 rounded-full border-2 border-secondary animate-float opacity-60" style="animation-delay: 2s;"></div>
+            <div class="absolute bottom-[15%] right-[15%] w-12 h-12 rounded-full border-2 border-secondary animate-float opacity-40" style="animation-delay: 3s;"></div>
+        </div>
+    </section>
+
+    <!-- 滚动到顶部按钮 -->
+    <button id="scrollToTop" class="fixed bottom-8 right-8 w-12 h-12 bg-primary text-white rounded-full shadow-lg flex items-center justify-center opacity-0 invisible transition-all duration-300 hover:bg-accent">
+        <i class="fa fa-arrow-up"></i>
+    </button>
+
+    <!-- JavaScript -->
+    <script src="/js/script.js"></script>
+</body>
+</html>
