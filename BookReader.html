@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电子书阅读器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1E40AF',
+                        secondary: '#64748B',
+                        accent: '#3B82F6',
+                        dark: '#0F172A',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .book-transition {
+                transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            }
+        }
+    </style>
+    <style>
+        /* 基础样式 */
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* 暗黑模式滚动条 */
+        .dark-mode ::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        .dark-mode ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+        }
+        
+        /* 进度条 */
+        .progress-container {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            height: 3px;
+            z-index: 1000;
+        }
+        .progress-bar {
+            height: 3px;
+            width: 0%;
+            background-color: #3B82F6;
+        }
+        
+        /* 内容区域的markdown样式 */
+        .content-area h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+        .content-area h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            line-height: 1.3;
+        }
+        .content-area h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.25rem;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
+        }
+        .content-area p {
+            margin-bottom: 1rem;
+            line-height: 1.7;
+            text-align: justify;
+        }
+        .content-area strong {
+            font-weight: 600;
+        }
+        .content-area em {
+            font-style: italic;
+        }
+        .content-area ul,
+        .content-area ol {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
+        .content-area ul li,
+        .content-area ol li {
+            margin-bottom: 0.5rem;
+            line-height: 1.7;
+        }
+        .content-area ul {
+            list-style-type: disc;
+        }
+        .content-area ol {
+            list-style-type: decimal;
+        }
+        .content-area blockquote {
+            border-left: 4px solid #3B82F6;
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: #64748B;
+            font-style: italic;
+        }
+        
+        /* 暗黑模式内容样式 */
+        .dark-mode .content-area h1,
+        .dark-mode .content-area h2,
+        .dark-mode .content-area h3 {
+            color: #F1F5F9;
+        }
+        .dark-mode .content-area p,
+        .dark-mode .content-area li {
+            color: #CBD5E1;
+        }
+        .dark-mode .content-area blockquote {
+            color: #94A3B8;
+        }
+        
+        /* 加载动画 */
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #3B82F6;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+    <!-- 进度条 -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    
+    <!-- 导航栏 -->
+    <nav id="navbar" class="fixed top-0 w-full bg-white/95 dark:bg-dark/95 shadow-sm z-50 transition-all duration-300">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <!-- 网站标题 -->
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-book text-primary text-xl"></i>
+                <span class="font-bold text-lg text-primary">电子书阅读器</span>
+            </div>
+            
+            <!-- 导航菜单 -->
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="/Bookshelf.html" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent transition-colors">
+                    <i class="fa fa-home mr-1"></i> 返回书架
+                </a>
+                <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <i class="fa fa-moon-o"></i>
+                </button>
+            </div>
+            
+            <!-- 移动端菜单按钮 -->
+            <button id="mobileMenuToggle" class="md:hidden p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                <i class="fa fa-bars"></i>
+            </button>
+        </div>
+        
+        <!-- 移动端菜单 -->
+        <div id="mobileMenu" class="hidden md:hidden bg-white dark:bg-dark border-t dark:border-gray-800">
+            <div class="container mx-auto px-4 py-2">
+                <a href="/Bookshelf.html" class="block py-2 text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent">
+                    <i class="fa fa-home mr-2"></i> 返回书架
+                </a>
+                <button id="mobileThemeToggle" class="w-full text-left py-2 text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent">
+                    <i class="fa fa-moon-o mr-2"></i> 切换主题
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主要内容区域 -->
+    <main class="container mx-auto px-4 pt-24 pb-16 max-w-3xl">
+        <!-- 书籍信息区域 -->
+        <div id="bookInfo" class="mb-10 text-center">
+            <h1 id="bookTitle" class="text-3xl md:text-4xl font-bold text-primary mb-3">乔布斯传</h1>
+            <p id="bookAuthor" class="text-xl text-secondary mb-6">沃尔特·艾萨克森</p>
+            <div id="currentChapter" class="text-sm text-accent italic">正在阅读: 序 前言 本书是如何诞生的</div>
+        </div>
+        
+        <!-- 章节导航按钮 -->
+        <div class="flex justify-between mb-8">
+            <button id="prevChapterBtn" class="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa fa-chevron-left mr-2"></i> 上一章
+            </button>
+            <button id="nextChapterBtn" class="px-4 py-2 bg-primary text-white hover:bg-accent rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                下一章 <i class="fa fa-chevron-right ml-2"></i>
+            </button>
+        </div>
+        
+        <!-- 内容显示区域 -->
+        <div id="contentArea" class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 md:p-8 min-h-[500px] content-area book-transition">
+            <div id="loadingIndicator" class="flex justify-center items-center h-full">
+                <div class="loading-spinner"></div>
+            </div>
+            <div id="content" class="hidden"></div>
+        </div>
+        
+        <!-- 章节列表按钮 -->
+        <div class="mt-8 text-center">
+            <button id="chapterListBtn" class="px-5 py-2.5 bg-white dark:bg-gray-800 text-primary border border-primary hover:bg-primary/5 dark:hover:bg-primary/10 rounded-md transition-all">
+                <i class="fa fa-list-ul mr-2"></i> 章节列表
+            </button>
+        </div>
+        
+        <!-- 章节列表模态框 -->
+        <div id="chapterListModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+            <div class="bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+                <div class="flex justify-between items-center p-4 border-b dark:border-gray-800">
+                    <h3 class="text-xl font-bold">章节列表</h3>
+                    <button id="closeChapterListBtn" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+                <div id="chapterList" class="p-4 overflow-y-auto max-h-[calc(80vh-120px)]">
+                    <!-- 章节列表将通过JavaScript动态生成 -->
+                </div>
+                <div class="p-4 border-t dark:border-gray-800 text-center">
+                    <button id="closeModalBtn" class="px-5 py-2 bg-primary text-white hover:bg-accent rounded-md transition-all">
+                        关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 页脚 -->
+    <footer class="bg-white dark:bg-gray-900 py-6 border-t dark:border-gray-800">
+        <div class="container mx-auto px-4 text-center text-gray-600 dark:text-gray-400">
+            <p>&copy; 2023 电子书阅读器 | 使用 Markdown 格式的本地书籍阅读器</p>
+        </div>
+    </footer>
+    
+    <!-- 滚动到顶部按钮 -->
+    <button id="backToTop" class="fixed bottom-8 right-8 bg-primary text-white p-3 rounded-full shadow-lg opacity-0 invisible transition-all duration-300 hover:bg-accent">
+        <i class="fa fa-arrow-up"></i>
+    </button>
+    
+    <!-- JavaScript -->
+    <script src="js/reader.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>
