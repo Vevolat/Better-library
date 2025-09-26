@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>电子书阅读器</title>
+    <title>Better library - 乔布斯传</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
@@ -160,7 +160,7 @@
             <!-- 网站标题 -->
             <div class="flex items-center space-x-2">
                 <i class="fa fa-book text-primary text-xl transition-transform duration-300 hover:rotate-12"></i>
-                <span class="font-bold text-lg text-primary transition-all duration-300">电子书阅读器</span>
+                <span class="font-bold text-lg text-primary transition-all duration-300">Better library</span>
             </div>
             
             <!-- 导航菜单 -->
@@ -198,7 +198,7 @@
             <div id="currentChapter" class="text-sm text-accent italic">正在阅读: 序 前言 本书是如何诞生的</div>
         </div>
         
-        <!-- 章节导航按钮 -->
+        <!-- 章节导航按钮 - 顶部 -->
     <div class="flex justify-between mb-8 fade-in-section">
         <button id="prevChapterBtn" class="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed btn-hover-effect">
             <i class="fa fa-chevron-left mr-2 transition-transform duration-300 hover:translate-x-[-2px]"></i> 上一章
@@ -207,6 +207,18 @@
             下一章 <i class="fa fa-chevron-right ml-2 transition-transform duration-300 hover:translate-x-[2px]"></i>
         </button>
     </div>
+
+        <!-- 章节列表 - 页面上方可见 -->
+    <div id="visibleChapterList" class="mb-8 p-4 bg-white/80 dark:bg-gray-800/80 rounded-lg shadow-md backdrop-blur-sm fade-in-section">
+        <h3 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fa fa-list-ul mr-2 text-primary"></i> 章节列表
+        </h3>
+        <div class="overflow-x-auto">
+            <div class="flex space-x-2 pb-2" id="chapterListContainer">
+                <!-- 章节列表将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
         
         <!-- 内容显示区域 -->
         <div id="contentArea" class="bg-f5f0e6 text-333333 rounded-lg shadow-lg p-6 md:p-8 min-h-[500px] content-area book-transition reading-mode">
@@ -214,6 +226,16 @@
                 <div class="loading-spinner"></div>
             </div>
             <div id="content" class="hidden"></div>
+        </div>
+
+        <!-- 章节导航按钮 - 底部 -->
+        <div class="flex justify-between mt-8 fade-in-section">
+            <button id="prevChapterBtnBottom" class="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed btn-hover-effect">
+                <i class="fa fa-chevron-left mr-2 transition-transform duration-300 hover:translate-x-[-2px]"></i> 上一章
+            </button>
+            <button id="nextChapterBtnBottom" class="px-4 py-2 bg-primary text-white hover:bg-accent rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed btn-hover-effect">
+                下一章 <i class="fa fa-chevron-right ml-2 transition-transform duration-300 hover:translate-x-[2px]"></i>
+            </button>
         </div>
         
         <!-- 章节列表按钮 -->
