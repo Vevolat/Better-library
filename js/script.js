@@ -243,58 +243,18 @@ if (contactFormElement) {
     });
 }
 
-// 阅读模式切换功能
-function setupThemeToggle() {
-    // 检查是否有手动设置
-    const readingMode = localStorage.getItem('readingMode') === 'true';
-    
-    // 如果是BookReader页面，默认使用阅读模式
+// 设置阅读模式
+function setupReadingMode() {
+    // 为BookReader.html页面自动应用阅读模式
     if (window.location.pathname.includes('BookReader.html')) {
-        document.body.classList.add('reading-mode');
-        // 移除暗黑模式类（如果存在）
-        document.body.classList.remove('dark-mode');
-        localStorage.setItem('readingMode', 'true');
-        localStorage.setItem('darkMode', 'false');
-    } else if (readingMode) {
-        // 非阅读器页面但用户设置了阅读模式
-        document.body.classList.add('reading-mode');
-    }
-    
-    // 更新图标显示
-    updateThemeToggleIcons();
-    
-    // 切换主题的函数
-    function toggleTheme() {
-        // 切换阅读模式类
-        const isReadingMode = document.body.classList.toggle('reading-mode');
-        localStorage.setItem('readingMode', isReadingMode);
+        const mainElement = document.querySelector('main');
+        const contentArea = document.getElementById('contentArea');
+        const navbar = document.getElementById('navbar');
         
-        // 如果进入阅读模式，移除暗黑模式
-        if (isReadingMode) {
-            document.body.classList.remove('dark-mode');
-            localStorage.setItem('darkMode', 'false');
-        }
-        
-        // 更新图标
-        updateThemeToggleIcons();
+        if (mainElement) mainElement.classList.add('reading-mode');
+        if (contentArea) contentArea.classList.add('reading-mode');
+        if (navbar) navbar.classList.add('reading-mode');
     }
-    
-    // 更新主题切换图标的函数
-    function updateThemeToggleIcons() {
-        const isReadingMode = document.body.classList.contains('reading-mode');
-        
-        if (isReadingMode) {
-            if (themeToggle) themeToggle.innerHTML = '<i class="fa fa-book"></i>';
-            if (mobileThemeToggle) mobileThemeToggle.innerHTML = '<i class="fa fa-book"></i> 退出阅读模式';
-        } else {
-            if (themeToggle) themeToggle.innerHTML = '<i class="fa fa-book"></i>';
-            if (mobileThemeToggle) mobileThemeToggle.innerHTML = '<i class="fa fa-book"></i> 阅读模式';
-        }
-    }
-    
-    // 添加事件监听器
-    if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
-    if (mobileThemeToggle) mobileThemeToggle.addEventListener('click', toggleTheme);
 }
 
 // 页面加载完成后初始化
@@ -602,8 +562,8 @@ function filterBooks(books, searchTerm) {
     renderBooks(filteredBooks);
 }
 
-// 初始化模式切换功能
-        setupThemeToggle();
+// 初始化阅读模式
+        setupReadingMode();
         
         // 如果是 Bookshelf 页面，初始化书籍功能
         if (booksGrid) {
