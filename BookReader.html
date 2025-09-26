@@ -165,11 +165,11 @@
             
             <!-- 导航菜单 -->
             <div class="hidden md:flex items-center space-x-6">
-                <a href="Bookshelf.html" class="text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent transition-colors btn-hover-effect">
+                <a href="Bookshelf.html" class="text-gray-600 hover:text-primary transition-colors btn-hover-effect">
                     <i class="fa fa-home mr-1"></i> 返回书架
                 </a>
-                <button id="themeToggle" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300">
-                    <i class="fa fa-moon-o transition-transform duration-300 hover:scale-110"></i>
+                <button id="readingModeBtn" class="p-2 rounded-full hover:bg-gray-100 transition-all duration-300">
+                    <i class="fa fa-book transition-transform duration-300 hover:scale-110"></i>
                 </button>
             </div>
             
@@ -180,20 +180,17 @@
         </div>
         
         <!-- 移动端菜单 -->
-        <div id="mobileMenu" class="hidden md:hidden bg-white dark:bg-dark border-t dark:border-gray-800 transition-all duration-300 transform origin-top">
+        <div id="mobileMenu" class="hidden md:hidden bg-white border-t transition-all duration-300 transform origin-top">
             <div class="container mx-auto px-4 py-2">
-                <a href="Bookshelf.html" class="block py-2 text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent transition-colors">
+                <a href="Bookshelf.html" class="block py-2 text-gray-600 hover:text-primary transition-colors">
                     <i class="fa fa-home mr-2"></i> 返回书架
                 </a>
-                <button id="mobileThemeToggle" class="w-full text-left py-2 text-gray-600 dark:text-gray-300 hover:text-primary dark:hover:text-accent transition-colors">
-                    <i class="fa fa-moon-o mr-2"></i> 切换主题
-                </button>
             </div>
         </div>
     </nav>
     
     <!-- 主要内容区域 -->
-    <main class="container mx-auto px-4 pt-24 pb-16 max-w-3xl">
+    <main class="container mx-auto px-4 pt-24 pb-16 max-w-3xl reading-mode">
         <!-- 书籍信息区域 -->
         <div id="bookInfo" class="mb-10 text-center">
             <h1 id="bookTitle" class="text-3xl md:text-4xl font-bold text-primary mb-3">乔布斯传</h1>
@@ -212,7 +209,7 @@
     </div>
         
         <!-- 内容显示区域 -->
-        <div id="contentArea" class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 md:p-8 min-h-[500px] content-area book-transition">
+        <div id="contentArea" class="bg-f5f0e6 text-333333 rounded-lg shadow-lg p-6 md:p-8 min-h-[500px] content-area book-transition reading-mode">
             <div id="loadingIndicator" class="flex justify-center items-center h-full">
                 <div class="loading-spinner"></div>
             </div>
