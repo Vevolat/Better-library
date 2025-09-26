@@ -10,12 +10,15 @@ let content = document.getElementById('content');
 // 直接使用window.loadingIndicator，不单独声明
 let prevChapterBtn = document.getElementById('prevChapterBtn');
 let nextChapterBtn = document.getElementById('nextChapterBtn');
+let prevChapterBtnBottom = document.getElementById('prevChapterBtnBottom');
+let nextChapterBtnBottom = document.getElementById('nextChapterBtnBottom');
 let currentChapterElement = document.getElementById('currentChapter');
 let bookTitleElement = document.getElementById('bookTitle');
 let bookAuthorElement = document.getElementById('bookAuthor');
 let chapterListBtn = document.getElementById('chapterListBtn');
 let chapterListModal = document.getElementById('chapterListModal');
 let chapterListElement = document.getElementById('chapterList');
+let chapterListContainer = document.getElementById('chapterListContainer');
 let closeChapterListBtn = document.getElementById('closeChapterListBtn');
 let closeModalBtn = document.getElementById('closeModalBtn');
 
@@ -268,8 +271,9 @@ async function initializeChapterList() {
     // 更新章节按钮状态
     updateChapterButtons();
     
-    // 生成章节列表
+    // 生成章节列表（模态框和顶部可见列表）
     generateChapterList();
+    generateVisibleChapterList();
 }
 
 // 加载章节内容
@@ -409,6 +413,7 @@ function renderMarkdown(text) {
 
 // 更新章节按钮状态
 function updateChapterButtons() {
+    // 更新顶部按钮
     if (prevChapterBtn) {
         prevChapterBtn.disabled = currentChapterIndex <= 0;
         if (currentChapterIndex <= 0) {
@@ -426,9 +431,31 @@ function updateChapterButtons() {
             nextChapterBtn.classList.remove('disabled:opacity-50', 'disabled:cursor-not-allowed');
         }
     }
+    
+    // 更新底部按钮
+    if (prevChapterBtnBottom) {
+        prevChapterBtnBottom.disabled = currentChapterIndex <= 0;
+        if (currentChapterIndex <= 0) {
+            prevChapterBtnBottom.classList.add('disabled:opacity-50', 'disabled:cursor-not-allowed');
+        } else {
+            prevChapterBtnBottom.classList.remove('disabled:opacity-50', 'disabled:cursor-not-allowed');
+        }
+    }
+    
+    if (nextChapterBtnBottom) {
+        nextChapterBtnBottom.disabled = currentChapterIndex >= chapterList.length - 1;
+        if (currentChapterIndex >= chapterList.length - 1) {
+            nextChapterBtnBottom.classList.add('disabled:opacity-50', 'disabled:cursor-not-allowed');
+        } else {
+            nextChapterBtnBottom.classList.remove('disabled:opacity-50', 'disabled:cursor-not-allowed');
+        }
+    }
+    
+    // 更新可见章节列表
+    generateVisibleChapterList();
 }
 
-// 生成章节列表
+// 生成章节列表（模态框）
 function generateChapterList() {
     if (!chapterListElement) return;
     
@@ -451,9 +478,41 @@ function generateChapterList() {
     });
 }
 
+// 生成可见的章节列表（页面顶部）
+function generateVisibleChapterList() {
+    if (!chapterListContainer) return;
+    
+    // 清空章节列表
+    chapterListContainer.innerHTML = '';
+    
+    // 添加章节项（创建一个水平滚动的章节列表）
+    chapterList.forEach((chapter, index) => {
+        const chapterItem = document.createElement('div');
+        chapterItem.className = `px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-all duration-300 ${index === currentChapterIndex ? 'bg-primary text-white font-medium scale-105 shadow-md' : 'bg-white/70 dark:bg-gray-700/70 hover:bg-primary/10 dark:hover:bg-primary/20'}`;
+        chapterItem.textContent = `第${parseInt(chapter.id) + 1}章`;
+        
+        // 添加点击事件
+        chapterItem.addEventListener('click', () => {
+            loadChapter(index);
+        });
+        
+        chapterListContainer.appendChild(chapterItem);
+    });
+
+    // 如果有当前章节，滚动到当前章节位置
+    if (currentChapterIndex >= 0 && chapterListContainer.children[currentChapterIndex]) {
+        setTimeout(() => {
+            chapterListContainer.scrollTo({
+                left: chapterListContainer.children[currentChapterIndex].offsetLeft - chapterListContainer.clientWidth / 2 + chapterListContainer.children[currentChapterIndex].clientWidth / 2,
+                behavior: 'smooth'
+            });
+        }, 100);
+    }
+}
+
 // 添加事件监听
 function addEventListeners() {
-    // 上一章按钮
+    // 上一章按钮（顶部）
     if (prevChapterBtn) {
         prevChapterBtn.addEventListener('click', () => {
             if (currentChapterIndex > 0) {
@@ -462,9 +521,27 @@ function addEventListeners() {
         });
     }
     
-    // 下一章按钮
+    // 下一章按钮（顶部）
     if (nextChapterBtn) {
         nextChapterBtn.addEventListener('click', () => {
+            if (currentChapterIndex < chapterList.length - 1) {
+                loadChapter(currentChapterIndex + 1);
+            }
+        });
+    }
+    
+    // 上一章按钮（底部）
+    if (prevChapterBtnBottom) {
+        prevChapterBtnBottom.addEventListener('click', () => {
+            if (currentChapterIndex > 0) {
+                loadChapter(currentChapterIndex - 1);
+            }
+        });
+    }
+    
+    // 下一章按钮（底部）
+    if (nextChapterBtnBottom) {
+        nextChapterBtnBottom.addEventListener('click', () => {
             if (currentChapterIndex < chapterList.length - 1) {
                 loadChapter(currentChapterIndex + 1);
             }
@@ -549,7 +626,3 @@ function loadReadingProgress() {
     }
     return false;
 }
-
-// 移动端菜单切换功能已在script.js中实现，这里不再重复声明和实现
-
-// 滚动到顶部按钮点击事件已经在script.js中实现，这里不再重复实现
