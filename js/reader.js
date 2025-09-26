@@ -376,9 +376,9 @@ function renderMarkdown(text) {
         // 删除线
         .replace(/~~(.*?)~~/gm, '<del>$1</del>')
         // 代码行
-        .replace(/`(.*?)`/gm, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm">$1</code>')
+        .replace(/`(.*?)`/gm, '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm">$1</code>')
         // 引用
-        .replace(/^> (.*?)$/gm, '<blockquote class="border-l-4 border-accent pl-4 italic text-gray-600 dark:text-gray-400 my-4">$1</blockquote>');
+        .replace(/^> (.*?)$/gm, '<blockquote class="border-l-4 border-accent pl-4 italic text-gray-600 my-4">$1</blockquote>');
     
     // 处理列表
     html = html.replace(/^\* (.*?)$/gm, '<li>$1</li>')
@@ -438,7 +438,7 @@ function generateChapterList() {
     // 添加章节项
     chapterList.forEach((chapter, index) => {
         const chapterItem = document.createElement('div');
-        chapterItem.className = `py-3 px-4 border-b dark:border-gray-800 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${index === currentChapterIndex ? 'bg-primary/10 text-primary font-medium' : ''}`;
+        chapterItem.className = `py-3 px-4 border-b cursor-pointer transition-colors hover:bg-gray-50 ${index === currentChapterIndex ? 'bg-primary/10 text-primary font-medium' : ''}`;
         chapterItem.textContent = chapter.title;
         
         // 添加点击事件
