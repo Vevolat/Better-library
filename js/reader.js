@@ -133,7 +133,7 @@ async function initializeChapterList() {
         },
         {
             id: '15',
-            title: '第十五章麦 金塔电脑的发布 在宇宙中留下印迹',
+            title: '第十五章 麦金塔电脑的发布 在宇宙中留下印迹',
             filePath: '/book/乔布斯传/第十五章麦 金塔电脑的发布 在宇宙中留下印迹.md'
         },
         {
