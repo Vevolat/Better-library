@@ -75,6 +75,12 @@
             </div>
         </div>
         
+        <!-- 调试信息区域 -->
+        <div id="debugInfo" class="col-span-full bg-gray-100 p-4 rounded-lg mb-8">
+            <h3 class="text-lg font-bold mb-2">调试信息</h3>
+            <div id="booksDataOutput"></div>
+        </div>
+        
         <!-- 书籍网格 -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" id="booksGrid">
             <!-- 加载状态 -->
@@ -84,6 +90,28 @@
             </div>
             
             <!-- 书籍将通过JavaScript动态加载 -->
+            <!-- 手动添加三体1书籍卡片 -->
+            <div class="book-card bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300 hover:shadow-xl">
+                <div class="h-48 bg-primary/10 flex items-center justify-center">
+                    <img src="/book/三体1：地球往事/santi-1.jpg" alt="三体1：地球往事" class="max-h-full max-w-full object-contain p-4">
+                </div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-2 line-clamp-1">三体1：地球往事</h3>
+                    <p class="text-accent mb-4 line-clamp-1">刘慈欣</p>
+                    <div class="flex items-center mb-4">
+                        <div class="text-yellow-500">
+                            <i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star"></i><i class="fa fa-star-half-o"></i>
+                        </div>
+                        <span class="ml-2 text-sm text-accent">4.9</span>
+                        <span class="mx-2 text-gray-300">•</span>
+                        <span class="text-sm text-accent">2351 reviews</span>
+                    </div>
+                    <p class="text-gray-600 mb-4 line-clamp-2 dark:text-gray-300">刘慈欣的科幻代表作三体系列第一部，讲述了人类文明与三体文明的首次接触。</p>
+                    <button data-filepath="/book/三体1：地球往事/1.疯狂年代.md" data-booktitle="三体1：地球往事" class="read-book-btn inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-accent transition-all duration-300 w-full text-center">
+                        Read Now
+                    </button>
+                </div>
+            </div>
         </div>
         
         <!-- 空状态 (初始隐藏) -->
@@ -119,18 +147,15 @@
                 </div>
             </div>
             
-            <div class="mt-8 pt-8 border-t text-center text-sm text-accent">
-                <p>&copy; 2023 优质图书馆. 保留所有权利。</p>
-            </div>
         </div>
     </footer>
 
     <!-- 回到顶部按钮 -->
     <button id="backToTop" class="fixed bottom-6 right-6 p-3 rounded-full bg-primary text-white shadow-lg opacity-0 invisible transition-all duration-300 hover:bg-accent">
         <i class="fa fa-arrow-up"></i>
-    </button>   > < /按钮
+    </button>
 
-    <!-- JavaScript -->   < !——JavaScript——>
-    <script src="/js/script.js"></script>< script   脚本 src = " / js / script.js " > < /脚本>
+    <!-- JavaScript -->
+    <script src="/js/script.js"></script>
 </body>
-    </html>
+</html>
