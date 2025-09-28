@@ -85,12 +85,14 @@ window.addEventListener('scroll', () => {
     progressBar.style.width = scrolled + '%';
     
     // 滚动到顶部按钮显示/隐藏
-    if (scrollPosition > 300) {
-        scrollToTopBtn.classList.remove('opacity-0', 'invisible');
-        scrollToTopBtn.classList.add('opacity-100', 'visible');
-    } else {
-        scrollToTopBtn.classList.remove('opacity-100', 'visible');
-        scrollToTopBtn.classList.add('opacity-0', 'invisible');
+    if (scrollToTopBtn) {
+        if (scrollPosition > 300) {
+            scrollToTopBtn.classList.remove('opacity-0', 'invisible');
+            scrollToTopBtn.classList.add('opacity-100', 'visible');
+        } else {
+            scrollToTopBtn.classList.remove('opacity-100', 'visible');
+            scrollToTopBtn.classList.add('opacity-0', 'invisible');
+        }
     }
     
     // 检查元素是否在视口中并触发动画（只对存在的元素进行操作）
@@ -144,12 +146,14 @@ if (mobileMenuToggle && mobileMenu) {
 }
 
 // 滚动到顶部按钮点击事件
-scrollToTopBtn.addEventListener('click', () => {
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
+if (scrollToTopBtn) {
+    scrollToTopBtn.addEventListener('click', () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
     });
-});
+}
 
 // 平滑滚动功能
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -164,9 +168,13 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             // 关闭移动端菜单（如果打开）
             if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
                 mobileMenu.classList.add('hidden');
-                const icon = menuBtn.querySelector('i');
-                icon.classList.remove('fa-times');
-                icon.classList.add('fa-bars');
+                if (menuBtn) {
+                    const icon = menuBtn.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('fa-times');
+                        icon.classList.add('fa-bars');
+                    }
+                }
             }
             
             // 平滑滚动到目标位置
@@ -463,17 +471,24 @@ function renderMarkdown(text) {
 
 // 打开书籍阅读器 - 根据书籍类型跳转到相应的阅读器页面
 function openBookReader(filePath, bookTitle) {
+    console.log('准备打开书籍:', bookTitle);
+    console.log('文件路径:', filePath);
+    
     // 根据书籍标题选择不同的阅读器页面
-    let readerPage = '/BookReader02.html'; // 默认使用BookReader02.html作为后备页面
+    let readerPage = '/BookReader01.html'; // 默认使用BookReader01.html作为后备页面
     
     if (bookTitle === '三体1：地球往事') {
         readerPage = '/BookReader01.html';
     } else if (bookTitle === '乔布斯传') {
         readerPage = '/BookReader02.html';
+    } else {
+        console.log('未知书籍标题，使用默认阅读器页面:', readerPage);
     }
     
     // 跳转到相应的阅读器页面，并通过URL参数传递书籍信息
-    window.location.href = `${readerPage}?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
+    const targetUrl = `${readerPage}?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
+    console.log('即将跳转到:', targetUrl);
+    window.location.href = targetUrl;
 }
 
 // 生成星级评分
