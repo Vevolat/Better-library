@@ -246,7 +246,7 @@ if (contactFormElement) {
 // 设置阅读模式
 function setupReadingMode() {
     // 为BookReader.html页面自动应用阅读模式
-    if (window.location.pathname.includes('BookReader.html')) {
+    if (window.location.pathname.includes('BookReader01.html')) {
         const mainElement = document.querySelector('main');
         const contentArea = document.getElementById('contentArea');
         const navbar = document.getElementById('navbar');
@@ -351,6 +351,17 @@ function fetchBooks() {
                     rating: 4.8,
                     reviewCount: 1254
                 },
+                {
+                    id: '2',
+                    title: '三体1：地球往事',
+                    author: '刘慈欣',
+                    category: 'fiction', // 修改为已有的分类
+                    coverPath: '/book/三体1：地球往事/santi-1.jpg',
+                    description: '刘慈欣的科幻代表作三体系列第一部，讲述了人类文明与三体文明的首次接触。',
+                    filePath: '/book/三体1：地球往事/1.疯狂年代.md',
+                    rating: 4.9,
+                    reviewCount: 2351
+                }
             ];
             resolve(books);
         }, 1000);
@@ -405,6 +416,10 @@ function renderBooks(books) {
             </div>
         `;
         
+        // 存储书籍信息到卡片元素
+        bookCard.dataset.filepath = book.filePath;
+        bookCard.dataset.booktitle = book.title;
+        
         booksGrid.appendChild(bookCard);
         
         // 添加动画
@@ -413,11 +428,20 @@ function renderBooks(books) {
         }, 100);
     });
     
-    // 添加书籍阅读按钮事件监听
-    document.querySelectorAll('.read-book-btn').forEach(button => {
-        button.addEventListener('click', function() {
+    // 添加书籍卡片点击事件监听
+    document.querySelectorAll('.book-card').forEach(card => {
+        card.addEventListener('click', function() {
             const filePath = this.getAttribute('data-filepath');
-            // 从按钮上获取书名（在renderBooks函数中设置）
+            const bookTitle = this.getAttribute('data-booktitle');
+            openBookReader(filePath, bookTitle);
+        });
+    });
+    
+    // 确保按钮点击时也能正常工作（阻止冒泡避免重复触发）
+    document.querySelectorAll('.read-book-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation(); // 阻止事件冒泡到卡片
+            const filePath = this.getAttribute('data-filepath');
             const bookTitle = this.getAttribute('data-booktitle');
             openBookReader(filePath, bookTitle);
         });
@@ -437,10 +461,19 @@ function renderMarkdown(text) {
         .replace(/\n/g, '<br>');
 }
 
-// 打开书籍阅读器 - 跳转到阅读器页面
+// 打开书籍阅读器 - 根据书籍类型跳转到相应的阅读器页面
 function openBookReader(filePath, bookTitle) {
-    // 跳转到BookReader.html页面，并通过URL参数传递书籍信息
-    window.location.href = `/BookReader.html?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
+    // 根据书籍标题选择不同的阅读器页面
+    let readerPage = '/BookReader02.html'; // 默认使用BookReader02.html作为后备页面
+    
+    if (bookTitle === '三体1：地球往事') {
+        readerPage = '/BookReader01.html';
+    } else if (bookTitle === '乔布斯传') {
+        readerPage = '/BookReader02.html';
+    }
+    
+    // 跳转到相应的阅读器页面，并通过URL参数传递书籍信息
+    window.location.href = `${readerPage}?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
 }
 
 // 生成星级评分
@@ -467,17 +500,60 @@ function generateStarRating(rating) {
 
 // 初始化 Bookshelf 页面
 async function initBookshelf() {
+    console.log('initBookshelf() 函数被调用');
+    console.log('booksGrid 元素:', booksGrid);
     if (!booksGrid) return; // 不是 Bookshelf 页面，不执行
     
     try {
+        // 先获取DOM中已有的手动添加的书籍卡片
+        const existingBookCards = Array.from(document.querySelectorAll('.book-card:not(#loadingIndicator)'));
+        console.log('DOM中已有的书籍卡片数量:', existingBookCards.length);
+        
         // 获取书籍数据
         const books = await fetchBooks();
+        console.log('fetchBooks() 返回的数据:', books);
         
         // 存储原始书籍数据用于过滤
         let allBooks = [...books];
+        console.log('allBooks 数据:', allBooks);
         
-        // 初始渲染所有书籍
-        renderBooks(books);
+        // 显示调试信息
+        const booksDataOutput = document.getElementById('booksDataOutput');
+        if (booksDataOutput) {
+            booksDataOutput.innerHTML = `<pre>${JSON.stringify(books, null, 2)}</pre>`;
+        }
+        
+        // 只在没有手动添加的书籍卡片时才清空和渲染
+        // 这样可以保留用户手动添加的书籍，比如三体1
+        if (existingBookCards.length === 0) {
+            renderBooks(books);
+        } else {
+            console.log('保留DOM中已有的书籍卡片，不重新渲染');
+            // 为保留的书籍卡片添加事件监听
+            document.querySelectorAll('.book-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    const filePath = this.getAttribute('data-filepath');
+                    const bookTitle = this.getAttribute('data-booktitle');
+                    openBookReader(filePath, bookTitle);
+                });
+            });
+            
+            // 为保留的阅读按钮添加事件监听
+            document.querySelectorAll('.read-book-btn').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation(); // 阻止事件冒泡到卡片
+                    const filePath = this.getAttribute('data-filepath');
+                    const bookTitle = this.getAttribute('data-booktitle');
+                    openBookReader(filePath, bookTitle);
+                });
+            });
+            
+            // 隐藏加载指示器
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            if (loadingIndicator) {
+                loadingIndicator.innerHTML = '';
+            }
+        }
         
         // 添加搜索功能
         if (searchInput) {
@@ -562,11 +638,13 @@ function filterBooks(books, searchTerm) {
     renderBooks(filteredBooks);
 }
 
-// 初始化阅读模式
-        setupReadingMode();
-        
-        // 如果是 Bookshelf 页面，初始化书籍功能
-        if (booksGrid) {
-            initBookshelf();
-        }
+// 当DOM加载完成时初始化页面
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化阅读模式
+    setupReadingMode();
+    
+    // 如果是 Bookshelf 页面，初始化书籍功能
+    if (booksGrid) {
+        initBookshelf();
+    }
 });
