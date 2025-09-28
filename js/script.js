@@ -85,14 +85,12 @@ window.addEventListener('scroll', () => {
     progressBar.style.width = scrolled + '%';
     
     // 滚动到顶部按钮显示/隐藏
-    if (scrollToTopBtn) {
-        if (scrollPosition > 300) {
-            scrollToTopBtn.classList.remove('opacity-0', 'invisible');
-            scrollToTopBtn.classList.add('opacity-100', 'visible');
-        } else {
-            scrollToTopBtn.classList.remove('opacity-100', 'visible');
-            scrollToTopBtn.classList.add('opacity-0', 'invisible');
-        }
+    if (scrollPosition > 300) {
+        scrollToTopBtn.classList.remove('opacity-0', 'invisible');
+        scrollToTopBtn.classList.add('opacity-100', 'visible');
+    } else {
+        scrollToTopBtn.classList.remove('opacity-100', 'visible');
+        scrollToTopBtn.classList.add('opacity-0', 'invisible');
     }
     
     // 检查元素是否在视口中并触发动画（只对存在的元素进行操作）
@@ -146,14 +144,12 @@ if (mobileMenuToggle && mobileMenu) {
 }
 
 // 滚动到顶部按钮点击事件
-if (scrollToTopBtn) {
-    scrollToTopBtn.addEventListener('click', () => {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth'
-        });
+scrollToTopBtn.addEventListener('click', () => {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
     });
-}
+});
 
 // 平滑滚动功能
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -168,13 +164,9 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             // 关闭移动端菜单（如果打开）
             if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
                 mobileMenu.classList.add('hidden');
-                if (menuBtn) {
-                    const icon = menuBtn.querySelector('i');
-                    if (icon) {
-                        icon.classList.remove('fa-times');
-                        icon.classList.add('fa-bars');
-                    }
-                }
+                const icon = menuBtn.querySelector('i');
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-bars');
             }
             
             // 平滑滚动到目标位置
@@ -471,24 +463,17 @@ function renderMarkdown(text) {
 
 // 打开书籍阅读器 - 根据书籍类型跳转到相应的阅读器页面
 function openBookReader(filePath, bookTitle) {
-    console.log('准备打开书籍:', bookTitle);
-    console.log('文件路径:', filePath);
-    
     // 根据书籍标题选择不同的阅读器页面
-    let readerPage = '/BookReader01.html'; // 默认使用BookReader01.html作为后备页面
+    let readerPage = '/BookReader02.html'; // 默认使用BookReader02.html作为后备页面
     
     if (bookTitle === '三体1：地球往事') {
         readerPage = '/BookReader01.html';
     } else if (bookTitle === '乔布斯传') {
         readerPage = '/BookReader02.html';
-    } else {
-        console.log('未知书籍标题，使用默认阅读器页面:', readerPage);
     }
     
     // 跳转到相应的阅读器页面，并通过URL参数传递书籍信息
-    const targetUrl = `${readerPage}?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
-    console.log('即将跳转到:', targetUrl);
-    window.location.href = targetUrl;
+    window.location.href = `${readerPage}?bookTitle=${encodeURIComponent(bookTitle)}&chapter=0`;
 }
 
 // 生成星级评分
@@ -520,10 +505,6 @@ async function initBookshelf() {
     if (!booksGrid) return; // 不是 Bookshelf 页面，不执行
     
     try {
-        // 先获取DOM中已有的手动添加的书籍卡片
-        const existingBookCards = Array.from(document.querySelectorAll('.book-card:not(#loadingIndicator)'));
-        console.log('DOM中已有的书籍卡片数量:', existingBookCards.length);
-        
         // 获取书籍数据
         const books = await fetchBooks();
         console.log('fetchBooks() 返回的数据:', books);
@@ -538,37 +519,8 @@ async function initBookshelf() {
             booksDataOutput.innerHTML = `<pre>${JSON.stringify(books, null, 2)}</pre>`;
         }
         
-        // 只在没有手动添加的书籍卡片时才清空和渲染
-        // 这样可以保留用户手动添加的书籍，比如三体1
-        if (existingBookCards.length === 0) {
-            renderBooks(books);
-        } else {
-            console.log('保留DOM中已有的书籍卡片，不重新渲染');
-            // 为保留的书籍卡片添加事件监听
-            document.querySelectorAll('.book-card').forEach(card => {
-                card.addEventListener('click', function() {
-                    const filePath = this.getAttribute('data-filepath');
-                    const bookTitle = this.getAttribute('data-booktitle');
-                    openBookReader(filePath, bookTitle);
-                });
-            });
-            
-            // 为保留的阅读按钮添加事件监听
-            document.querySelectorAll('.read-book-btn').forEach(button => {
-                button.addEventListener('click', function(e) {
-                    e.stopPropagation(); // 阻止事件冒泡到卡片
-                    const filePath = this.getAttribute('data-filepath');
-                    const bookTitle = this.getAttribute('data-booktitle');
-                    openBookReader(filePath, bookTitle);
-                });
-            });
-            
-            // 隐藏加载指示器
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            if (loadingIndicator) {
-                loadingIndicator.innerHTML = '';
-            }
-        }
+        // 初始渲染所有书籍
+        renderBooks(books);
         
         // 添加搜索功能
         if (searchInput) {
